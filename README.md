@@ -9,3 +9,7 @@
 - `make`: Compile and run `tests/test.jl`
 - `make clean`: Clean compilation files.
 - `make explain`: Explain grammar conflicts.
+- `make tests`: Run all the tests.
+- `make vtests`: Run all the tests (verbose).
+- `make test1`: Run the parsing tests.
+- `make vtest1`: Run the parsing tests (verbose).
