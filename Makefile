@@ -4,7 +4,12 @@ all: pjuliac.exe
 pjuliac.exe:
 	dune build src/pjuliac.exe
 
+explain: pjuliac.exe
+	menhir --base /tmp/parser --dump --explain src/parser.mly
+	cat /tmp/parser.conflicts
+
 clean:
 	dune clean
+	rm -f /tmp/parser.conflicts
 
-.PHONY: all clean
+.PHONY: all explain clean
