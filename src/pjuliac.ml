@@ -29,14 +29,11 @@ let options = [
 	("--print", Arg.Set print, "Print the parsed ast.");
 	("--debug", Arg.Set debug, "Print the tokens."); ]
 
-(*
-Print in stderr the current position in the form of
-a file name followed by row and column position.
-*)
-let localisation pos =
-	let l = pos.pos_lnum in
-	let c = pos.pos_cnum - pos.pos_bol + 1 in
-	Format.eprintf "File \"%s\", line %d, characters %d-%d:@." !file l (c-1) c
+(* Print in stderr the localisation. *)
+let print_localisation l =
+	Format.eprintf
+		"File \"%s\", line %d, character %d to line %d, character %d:@."
+		!file l.l_start l.c_start l.l_end l.c_end
 
 (* Open a file in read mode. *)
 let open_file filename =
@@ -96,7 +93,7 @@ let () =
 		(*
 		TODO
 		(* Type. *)
-		let genv, lenv, tast = Type.typing ast in (* The variables aren't used yet. *)
+		let genv, lenv, tast = Type.typing ast in
 		*)
 
 		if !type_only then exit 0;
@@ -107,21 +104,18 @@ let () =
 
 	with
 		| Lexer.Lexing_error s ->
-			localisation (Lexing.lexeme_start_p lb);
+			print_localisation (current_loc lb);
 			Format.eprintf "Lexical error: %s@.@?" s;
 			exit 1
 		| Parser.Error ->
-			localisation (Lexing.lexeme_start_p lb);
+			print_localisation (current_loc lb);
 			Format.eprintf "Syntax error.@.@?";
 			exit 1
 		| Ast.Syntax_error s ->
-			localisation (Lexing.lexeme_start_p lb);
+			print_localisation (current_loc lb);
 			Format.eprintf "Syntax error: %s@.@?" s;
 			exit 1
-		(*
-		TODO
-		| Typ.Type_error s ->
-			localisation (Lexing.lexeme_start_p lb); (* TODO localisation *)
+		| Typ.Type_error (l, s) ->
+			print_localisation l;
 			Format.eprintf "Type error: %s@.@?" s;
 			exit 1
-		*)

@@ -6,32 +6,12 @@
 	exception Lexing_error of string
 	let lexing_error s = raise (Lexing_error s)
 
-	let kwd_assoc = [
-		"if",		Tif;
-		"else",		Telse;
-		"elseif",	Telseif;
-		"end",		Tend;
-		"true",		Ttrue;
-		"false",	Tfalse;
-		"function",	Tfunction;
-		"return",	Treturn;
-		"mutable",	Tmutable;
-		"struct",	Tstruct;
-		"for",		Tfor;
-		"while",	Twhile; ]
-
-	(* Lex ident or keyword. *)
-	let ident_or_kwd s =
-		(* Closure. *)
-		let h = Hashtbl.create 16 in
-		List.iter (fun (s, t) -> Hashtbl.add h s t) kwd_assoc;
-		try Hashtbl.find h s
-		with Not_found -> Tident s
+	let cl = Ast.current_loc
 
 	(* Decides if a semicolon should be added after the token. *)
 	let add_semicolon_after_token = function
 		| Tident _ | Tint _ | Tint_ident _ | Trpar_ident _ | Tstring _
-		| Ttrue | Tfalse | Treturn | Trpar | Tend -> true
+		| Ttrue _ | Tfalse _ | Treturn _ | Trpar | Tend -> true
 		| _ -> false
 
 	(* Convert string to int64. *)
@@ -47,48 +27,48 @@
 		with _ -> lexing_error (sprintf "Constant to large: %s" s)
 
 	let print_token = function
-		| Tident s			-> printf "Tident %s@.@?" s
-		| Tint i			-> printf "Tint %Ld@.@?" i
-		| Tstring s			-> printf "Tstring %s@.@?" s
-		| Ttrue				-> printf "True@.@?"
-		| Tfalse			-> printf "Tfalse@.@?"
-		| Treturn			-> printf "Treturn@.@?"
-		| Trpar				-> printf "Trpar@.@?"
-		| Tend				-> printf "Tend@.@?"
-		| Tif				-> printf "Tif@.@?"
-		| Telse				-> printf "Telse@.@?"
-		| Telseif			-> printf "Telseif@.@?"
-		| Tfunction			-> printf "Tfunction@.@?"
-		| Tmutable			-> printf "Tmutable@.@?"
-		| Tstruct			-> printf "Tstruct@.@?"
-		| Tfor				-> printf "Tfor@.@?"
-		| Twhile			-> printf "Twhile@.@?"
-		| Teof				-> printf "Teof@.@?"
-		| Tcomma			-> printf "Tcomma@.@?"
-		| Tcolon			-> printf "Tcolon@.@?"
-		| Tdoublecolon		-> printf "Tdoublecolon@.@?"
-		| Tdot				-> printf "Tdot@.@?"
-		| Tsemicolon		-> printf "Tsemicolon@.@?"
-		| Tlpar				-> printf "Tlpar@.@?"
-		| Tnot				-> printf "Tnot@.@?"
-		| Teq				-> printf "Teq@.@?"
-		| Ttesteq			-> printf "Ttesteq@.@?"
-		| Tneq				-> printf "Tneq@.@?"
-		| Tl				-> printf "Tl@.@?"
-		| Tleq				-> printf "Tleq@.@?"
-		| Tg				-> printf "Tg@.@?"
-		| Tgeq				-> printf "Tgeq@.@?"
-		| Tadd				-> printf "Tadd@.@?"
-		| Tsub				-> printf "Tsub@.@?"
-		| Tmul				-> printf "Tmul@.@?"
-		| Tmod				-> printf "Tmod@.@?"
-		| Tpow				-> printf "Tpow@.@?"
-		| Tand				-> printf "Tand@.@?"
-		| Tor				-> printf "Tor@.@?"
-		| Tint_ident (i, s)	-> printf "Tint_ident %Ld %s@.@?" i s
-		| Tident_lpar s		-> printf "Tident_lpar %s@.@?" s
-		| Tint_lpar i		-> printf "Tint_lpar %Ld@.@?" i
-		| Trpar_ident s		-> printf "Trpar_ident %s@.@?" s
+		| Tident (_, s)				-> printf "Tident %s@.@?" s
+		| Tint (_, i)				-> printf "Tint %Ld@.@?" i
+		| Tstring (_, s)			-> printf "Tstring %s@.@?" s
+		| Ttrue _					-> printf "True@.@?"
+		| Tfalse _					-> printf "Tfalse@.@?"
+		| Treturn _					-> printf "Treturn@.@?"
+		| Trpar						-> printf "Trpar@.@?"
+		| Tend						-> printf "Tend@.@?"
+		| Tif _						-> printf "Tif@.@?"
+		| Telse _					-> printf "Telse@.@?"
+		| Telseif _					-> printf "Telseif@.@?"
+		| Tfunction _				-> printf "Tfunction@.@?"
+		| Tmutable _				-> printf "Tmutable@.@?"
+		| Tstruct _					-> printf "Tstruct@.@?"
+		| Tfor _					-> printf "Tfor@.@?"
+		| Twhile _					-> printf "Twhile@.@?"
+		| Teof						-> printf "Teof@.@?"
+		| Tcomma					-> printf "Tcomma@.@?"
+		| Tcolon					-> printf "Tcolon@.@?"
+		| Tdoublecolon				-> printf "Tdoublecolon@.@?"
+		| Tdot						-> printf "Tdot@.@?"
+		| Tsemicolon				-> printf "Tsemicolon@.@?"
+		| Tlpar						-> printf "Tlpar@.@?"
+		| Tnot _					-> printf "Tnot@.@?"
+		| Teq						-> printf "Teq@.@?"
+		| Ttesteq					-> printf "Ttesteq@.@?"
+		| Tneq						-> printf "Tneq@.@?"
+		| Tl						-> printf "Tl@.@?"
+		| Tleq						-> printf "Tleq@.@?"
+		| Tg						-> printf "Tg@.@?"
+		| Tgeq						-> printf "Tgeq@.@?"
+		| Tadd						-> printf "Tadd@.@?"
+		| Tsub _					-> printf "Tsub@.@?"
+		| Tmul						-> printf "Tmul@.@?"
+		| Tmod						-> printf "Tmod@.@?"
+		| Tpow						-> printf "Tpow@.@?"
+		| Tand						-> printf "Tand@.@?"
+		| Tor						-> printf "Tor@.@?"
+		| Tint_ident (_, i, (_, s))	-> printf "Tint_ident %Ld %s@.@?" i s
+		| Tident_lpar (_, s)		-> printf "Tident_lpar %s@.@?" s
+		| Tint_lpar (_, i)			-> printf "Tint_lpar %Ld@.@?" i
+		| Trpar_ident (_, s)		-> printf "Trpar_ident %s@.@?" s
 
 	(* true if we should insert a semicolon if we see a newline. *)
 	let semicolon = ref false
@@ -116,7 +96,7 @@ rule token = parse
 	| ';'						{ Tsemicolon }
 	| '('						{ Tlpar }
 	| ')'						{ Trpar }
-	| '!'						{ Tnot }
+	| '!'						{ Tnot (cl lexbuf)}
 	| '='						{ Teq }
 	| "=="						{ Ttesteq }
 	| "!="						{ Tneq }
@@ -125,19 +105,36 @@ rule token = parse
 	| '>'						{ Tg }
 	| ">="						{ Tgeq }
 	| '+'						{ Tadd }
-	| '-'						{ Tsub }
+	| '-'						{ Tsub (cl lexbuf) }
 	| '*'						{ Tmul }
 	| '%'						{ Tmod }
 	| '^'						{ Tpow }
 	| "&&"						{ Tand }
 	| "||"						{ Tor }
-	| (integer as i) (ident as s)	{ Tint_ident (int64_of_string i, s) }
-	| ident as s '('			{ Tident_lpar s }
-	| integer as i '('			{ Tint_lpar (int64_of_string i) }
-	| ')' (ident as s)			{ Trpar_ident s }
-	| integer as i				{ Tint (int64_of_string i) }
-	| '"' (character* as s) '"'	{ Tstring s }
-	| ident as s				{ ident_or_kwd s }
+	(* We can't simply use a hash table because we need the localisation.
+	(But there is a work around.) *)
+	| "if"						{ Tif (cl lexbuf) }
+	| "else"					{ Telse (cl lexbuf) }
+	| "elseif"					{ Telseif (cl lexbuf) }
+	| "end"						{ Tend }
+	| "true"					{ Ttrue (cl lexbuf) }
+	| "false"					{ Tfalse (cl lexbuf) }
+	| "function"				{ Tfunction (cl lexbuf) }
+	| "return"					{ Treturn (cl lexbuf) }
+	| "mutable"					{ Tmutable (cl lexbuf) }
+	| "struct"					{ Tstruct (cl lexbuf) }
+	| "for"						{ Tfor (cl lexbuf) }
+	| "while"					{ Twhile (cl lexbuf) }
+	| (integer as i) (ident as s)
+		{ let l = cl lexbuf in
+		let n = int64_of_string i in
+		Tint_ident (l, n, (l, s)) }
+	| ident as s '('			{ Tident_lpar (cl lexbuf, s) }
+	| integer as i '('			{ Tint_lpar (cl lexbuf, int64_of_string i) }
+	| ')' (ident as s)			{ Trpar_ident (cl lexbuf, s) }
+	| integer as i				{ Tint (cl lexbuf, int64_of_string i) }
+	| '"' (character* as s) '"'	{ Tstring (cl lexbuf, s) }
+	| ident as s				{ Tident (cl lexbuf, s) }
 	| _ as c					{ lexing_error ("Illegal character: " ^ String.make 1 c) }
 
 

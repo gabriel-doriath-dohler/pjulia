@@ -1,10 +1,21 @@
 open Format
 
 
+type loc = { l_start : int; l_end : int; c_start : int; c_end : int }
+[@@deriving show]
+
+let current_loc lb =
+	let pos_start = Lexing.lexeme_start_p lb in
+	let pos_end = Lexing.lexeme_end_p lb in
+	{ l_start = pos_start.pos_lnum;
+	l_end = pos_end.pos_lnum;
+	c_start = pos_start.pos_cnum - pos_start.pos_bol;
+	c_end = pos_end.pos_cnum - pos_end.pos_bol; }
+
 exception Syntax_error of string
 let syntax_error s = raise (Syntax_error s)
 
-type ident = string
+type ident = loc * string
 [@@deriving show]
 
 (* Types. *)
@@ -22,26 +33,26 @@ module Typ = struct
 			| Int64		-> "Int64"
 			| Bool		-> "Bool"
 			| String	-> "String"
-			| Struct s	-> sprintf "Struct %s" s)
+			| Struct s	-> sprintf "Struct %s" (snd s))
 
 	let rec print_list fmt = function
 		| []		-> ()
 		| [t]		-> print fmt t
 		| t :: l	-> fprintf fmt "%a, " print t; print_list fmt l
 
-	let of_string = function
-		| "Any"		-> Any
-		| "Nothing"	-> Nothing
-		| "Int64"	-> Int64
-		| "Bool"	-> Bool
-		| "String"	-> String
-		| s			-> Struct s
+	let of_string (l, typ) = match typ with
+			| "Any"		-> Any
+			| "Nothing"	-> Nothing
+			| "Int64"	-> Int64
+			| "Bool"	-> Bool
+			| "String"	-> String
+			| s			-> Struct (l, s)
 
 	(* Error handeling. *)
-	exception Type_error of string
-	let type_error s = raise (Type_error s)
+	exception Type_error of loc * string
+	let type_error l s = raise (Type_error (l, s))
 
-	let compat_error t1 t2 = type_error (asprintf
+	let compat_error l t1 t2 = type_error l (asprintf
 		"This expression has type %a but an expression was expected of type %a."
 		print t1 print t2)
 
@@ -50,23 +61,25 @@ module Typ = struct
 		t1 = t2 || t1 = Any || t2 = Any
 
 	(* Check the compatibility of t1 and t2. *)
-	let assert_compatible t1 t2 =
+	let assert_compatible l t1 t2 =
 		if not (are_compatible t1 t2) then
-			compat_error t1 t2
+			compat_error l t1 t2
 
 	(* Returns the type t1 and t2 must be to be compatible. *)
-	let common_type t1 t2 = match t1, t2 with
+	let common_type l t1 t2 = match t1, t2 with
 		| Any, Any			-> Any
 		| Any, _			-> t2
 		| _, Any			-> t1
 		| _ when t1 = t2	-> t1
-		| _					-> compat_error t1 t2
+		| _					-> compat_error l t1 t2
 end
 
 type binop = Eq | Neq | L | Leq | G | Geq | Add | Sub | Mul | Mod | Pow | And | Or
 [@@deriving show]
 
-type expr =
+type expr = loc * non_loc_expr
+
+and non_loc_expr =
 	(* Constants. *)
 	| Int of int64
 	| Str of string
@@ -90,7 +103,10 @@ type expr =
 	| If of expr * block * else_block
 [@@deriving show]
 
-and else_block =
+and else_block = loc * non_loc_else_block
+[@@deriving show]
+
+and non_loc_else_block =
 	| End
 	| Else of block
 	| Elseif of expr * block * else_block
@@ -99,25 +115,30 @@ and else_block =
 and block = expr list
 [@@deriving show]
 
-and lvalue =
+and lvalue = loc * non_loc_lvalue
+[@@deriving show]
+
+and non_loc_lvalue =
 	| Var of ident
 	| Field of expr * ident
 [@@deriving show]
 
 type param =
 	{ p_name : ident;
-	p_type : Typ.t; }
+	p_type : loc * Typ.t; }
 [@@deriving show]
 
 type func =
-	{ f_name : ident;
+	{ f_loc : loc;
+	f_name : ident;
 	f_params : param list;
-	f_type : Typ.t;
+	f_type : loc * Typ.t;
 	f_body : block; }
 [@@deriving show]
 
 type structure =
-	{ s_mut : bool;
+	{ s_loc : loc;
+	s_mut : bool;
 	s_name : ident;
 	s_params : param list; }
 [@@deriving show]

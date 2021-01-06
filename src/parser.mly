@@ -1,35 +1,45 @@
 %{
 	open Ast
+
+	let empty_loc = { l_start = -1; l_end = -1; c_start = -1; c_end = -1; }
 %}
 
 /* Definition of the tokens. */
 (* Control structures. *)
-%token Tif Telse Telseif Tend
-%token Tfor Twhile
+%token <Ast.loc> Tif
+%token <Ast.loc> Telse
+%token <Ast.loc> Telseif
+%token Tend
+%token <Ast.loc> Tfor
+%token <Ast.loc> Twhile
 (* Functions and structures. *)
-%token Tfunction Treturn
-%token Tmutable Tstruct
+%token <Ast.loc> Tfunction
+%token <Ast.loc> Treturn
+%token <Ast.loc> Tmutable
+%token <Ast.loc> Tstruct
 (* String and ident. *)
-%token <string> Tstring
+%token <Ast.loc * string> Tstring
 %token <Ast.ident> Trpar_ident
 %token <Ast.ident> Tident_lpar
 %token <Ast.ident> Tident
 (* Int and ident. *)
-%token <int64> Tint
-%token <int64> Tint_lpar
-%token <int64 * Ast.ident> Tint_ident
+%token <Ast.loc * int64> Tint
+%token <Ast.loc * int64> Tint_lpar
+%token <Ast.loc * int64 * Ast.ident> Tint_ident
 (* Tests. *)
 %token Teq Ttesteq Tneq Tl Tleq Tg Tgeq
 (* Symbols. *)
-%token Tcomma Tcolon Tdoublecolon Tdot Tsemicolon
+%token Tcomma Tsemicolon Tcolon Tdoublecolon Tdot
 (* Parantheses. *)
 %token Tlpar Trpar
 (* Booleans. *)
-%token Ttrue Tfalse
+%token <Ast.loc> Ttrue
+%token <Ast.loc> Tfalse
 %token Tand Tor
-%token Tnot
+%token <Ast.loc> Tnot
 (* Arithmetic. *)
-%token Tadd Tsub Tmul Tmod Tpow
+%token <Ast.loc> Tsub
+%token Tadd Tmul Tmod Tpow
 (* End of file. *)
 %token Teof
 
@@ -62,99 +72,103 @@
 %%
 
 file:
-	decls = decl* Teof	{ decls }
+	decls=decl* Teof	{ decls }
 
 decl:
-	| e = expr Tsemicolon	{ Expr e }
-	| f = func				{ Func f }
-	| s = structure			{ Structure s }
+	| e=expr Tsemicolon	{ Expr e }
+	| f=func			{ Func f }
+	| s=structure		{ Structure s }
 
 structure:
-	| Tmutable Tstruct name = Tident params = param_list Tend Tsemicolon
-		{ { s_mut = true; s_name = name; s_params = params } }
-	| Tstruct name = Tident params = param_list Tend Tsemicolon
-		{ { s_mut = false; s_name = name; s_params = params } }
+	| l=Tmutable z=Tstruct name=Tident params=param_list Tend Tsemicolon
+		{ { s_loc=l; s_mut=true; s_name=name; s_params=params } }
+	| l=Tstruct name=Tident params=param_list Tend Tsemicolon
+		{ { s_loc=l; s_mut=false; s_name=name; s_params=params } }
 
 func:
-	| Tfunction name = Tident_lpar params = separated_list(Tcomma, param)
-		Trpar Tdoublecolon typ = Tident b = block Tend Tsemicolon
-  		{ { f_name = name; f_params = params; f_type = Typ.of_string typ; f_body = b } }
-	| Tfunction name = Tident_lpar params = separated_list(Tcomma, param)
-		Trpar b = block Tend Tsemicolon
-  		{ { f_name = name; f_params = params; f_type = Typ.Any; f_body = b } }
+	| l=Tfunction name=Tident_lpar params=separated_list(Tcomma, param)
+		Trpar Tdoublecolon typ=Tident b=block Tend Tsemicolon
+  		{ { f_loc=l; f_name=name; f_params=params; f_type=(fst typ, Typ.of_string typ); f_body=b } }
+	| l=Tfunction name=Tident_lpar params=separated_list(Tcomma, param)
+		Trpar b=block Tend Tsemicolon
+  		{ { f_loc=l; f_name=name; f_params=params; f_type=(empty_loc, Typ.Any); f_body=b } }
 
 param:
-	| name = Tident
-		{ { p_name = name; p_type = Typ.Any } }
-	| name = Tident Tdoublecolon typ = Tident
-		{ { p_name = name; p_type = Typ.of_string typ } }
+	| name=Tident
+		{ { p_name=name; p_type=(empty_loc, Typ.Any) } }
+	| name=Tident Tdoublecolon typ=Tident
+		{ { p_name=name; p_type=(fst typ, Typ.of_string typ) } }
 
 param_list:
-	| 										{ [] }
-	| p = param								{ [p] }
-	| p = param Tsemicolon bl = param_list	{ p :: bl }
-	| Tsemicolon bl = param_list			{ bl }
+	| 									{ [] }
+	| p=param							{ [p] }
+	| p=param Tsemicolon bl=param_list	{ p :: bl }
+	| Tsemicolon bl=param_list			{ bl }
 
 (* Expressions wich don't start with a unitary minus. *)
 expr_without_uminus:
 	(* Constants. *)
-	| n = Tint															{ Int n }
-	| s = Tstring														{ Str s }
-	| Ttrue																{ Bool true }
-	| Tfalse															{ Bool false }
+	| n=Tint	{ fst n, Int (snd n) }
+	| s=Tstring	{ fst s, Str (snd s) }
+	| l=Ttrue	{ l, Bool true }
+	| l=Tfalse	{ l, Bool false }
 
 	(* Expressions with parentheses. *)
 	(* intident *)
-	| n_id = Tint_ident
-		{ Binop (Int (fst n_id), Mul, Lval (Var (snd n_id))) }
+	| n_id=Tint_ident
+		{ match n_id with
+			| l, n, id -> l, Binop ((l, Int n), Mul, (l, Lval (l, Var id))) }
 	(* int(block1) *)
-	| n = Tint_lpar b = block1 Trpar									{ Binop (Int n, Mul, Par b) }
+	| n=Tint_lpar b=block1 Trpar
+		{ fst n, Binop ((fst n, Int (snd n)), Mul, (fst n, Par b)) }
 	(* (block1) *)
-	| Tlpar b = block1 Trpar											{ Par b }
+	| Tlpar b=block1 Trpar
+		{ fst (List.hd b), Par b }
 	(* (expr)ident *)
-	| Tlpar e = expr id = Trpar_ident									{ Binop (e, Mul, Lval (Var id)) }
+	| Tlpar e=expr id=Trpar_ident
+		{ fst e, Binop (e, Mul, (fst id, Lval (fst id, Var id))) }
 
 	(* Call. *)
-	| name = Tident_lpar inputs = separated_list(Tcomma, expr) Trpar
-		{ if name = "println" then
-			Call ("print", inputs @ [Str "\n"])
+	| name=Tident_lpar inputs=separated_list(Tcomma, expr) Trpar
+		{ if snd name = "println" then
+			fst name, Call ((fst name, "print"), inputs @ [empty_loc, Str "\n"])
 		else
-			Call (name, inputs) }
+			fst name, Call (name, inputs) }
 	(* Operations. *)
-	| Tnot e = expr												{ Not e }
-	| e1 = expr_without_uminus o = op e2 = expr					{ Binop (e1, o, e2) }
+	| l=Tnot e=expr											{ l, Not e }
+	| e1=expr_without_uminus o=op e2=expr					{ fst e1, Binop (e1, o, e2) }
 	(* Lvalues. *)
-	| l = lvalue												{ Lval l }
-	| l = lvalue Teq e = expr									{ Affect (l, e) }
+	| l=lvalue												{ fst l, Lval l }
+	| l=lvalue Teq e=expr									{ fst l, Affect (l, e) }
 	(* Return. *)
-	| Treturn e = expr											{ Return (Some e) }
-	| Treturn													{ Return None }
+	| l=Treturn e = expr									{ l, Return (Some e) }
+	| l=Treturn												{ l, Return None }
 	(* Control structures. *)
-	| Tfor idx = Tident Teq e1 = expr Tcolon e2 = expr b = block_without_uminus Tend
-		{ For (idx, e1, e2, b) }
-	| Twhile e = expr b = block_without_uminus Tend				{ While (e, b) }
-	| Tif e = expr b1 = block_without_uminus b2 = else_block	{ If (e, b1, b2) }
+	| l=Tfor idx=Tident Teq e1=expr Tcolon e2=expr b=block_without_uminus Tend
+		{ l, For (idx, e1, e2, b) }
+	| l=Twhile e=expr b=block_without_uminus Tend			{ l, While (e, b) }
+	| l=Tif e=expr b1=block_without_uminus b2=else_block	{ l, If (e, b1, b2) }
 
 (* Expression starting with a unitary minus. *)
 expr_with_uminus:
 	(* Match the longest expression possible after while, if, elseif, lvalue and for. *)
-	| Tsub e = expr %prec uminus								{ Binop (Int 0L, Sub, e) }
-	| e1 = expr_with_uminus o = op e2 = expr					{ Binop (e1, o, e2) }
+	| l=Tsub e = expr %prec uminus							{ l, Binop ((l, Int 0L), Sub, e) }
+	| e1=expr_with_uminus o=op e2=expr						{ fst e1, Binop (e1, o, e2) }
 
 %inline expr:
-	| e = expr_with_uminus		{ e }
-	| e = expr_without_uminus	{ e }
+	| e=expr_with_uminus	{ e }
+	| e=expr_without_uminus	{ e }
 
 %inline lvalue:
-	| id = Tident								{ Var id }
-	| e = expr_without_uminus Tdot id = Tident	{ Field (e, id) }
+	| id=Tident								{ fst id, Var id }
+	| e=expr_without_uminus Tdot id=Tident	{ fst e, Field (e, id) }
 
 else_block:
-	| Tend							{ End }
-	| Telse b = block Tend			{ Else b }
-	| Telse Tif %prec else_if_error	{ Ast.syntax_error "The token if can't follow else." }
-	| Telseif e = expr b1 = block_without_uminus b2 = else_block
-		{ Else [If (e, b1, b2)] }
+	| Tend									{ empty_loc, End }
+	| l=Telse b=block Tend					{ l, Else b }
+	| z=Telse zz=Tif %prec else_if_error	{ Ast.syntax_error "The token if can't follow else." }
+	| l=Telseif e=expr b1=block_without_uminus b2=else_block
+		{ l, Else [l, If (e, b1, b2)] }
 
 %inline op:
 	(* Tests. *)
@@ -166,7 +180,7 @@ else_block:
 	| Tgeq		{ Geq }
 	(* Arithmetic. *)
 	| Tadd		{ Add }
-	| Tsub		{ Sub }
+	| z=Tsub	{ Sub }
 	| Tmul		{ Mul }
 	| Tmod		{ Mod }
 	| Tpow		{ Pow }
@@ -175,19 +189,19 @@ else_block:
 	| Tor		{ Or }
 
 block:
-	| 								{ [] }
-	| e = expr						{ [e] }
-	| e = expr Tsemicolon b = block	{ e :: b }
-	| Tsemicolon b = block			{ b }
+	| 							{ [] }
+	| e=expr					{ [e] }
+	| e=expr Tsemicolon b=block	{ e :: b }
+	| Tsemicolon b=block		{ b }
 
 (* Blocks wich don't start with a unitary minus. *)
 block_without_uminus:
-	| 												{ [] }
-	| e = expr_without_uminus						{ [e] }
-	| e = expr_without_uminus Tsemicolon b = block	{ e :: b }
-	| Tsemicolon b = block							{ b }
+	| 											{ [] }
+	| e=expr_without_uminus						{ [e] }
+	| e=expr_without_uminus Tsemicolon b=block	{ e :: b }
+	| Tsemicolon b=block						{ b }
 
 (* Non empty block. *)
 %inline block1:
-	| e = expr						{ [e] }
-	| e = expr Tsemicolon b = block	{ e :: b }
+	| e=expr					{ [e] }
+	| e=expr Tsemicolon b=block	{ e :: b }
