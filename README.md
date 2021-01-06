@@ -8,3 +8,4 @@
 ## Usage
 - `make`: Compile and run `tests/test.jl`
 - `make clean`: Clean compilation files.
+- `make explain`: Explain grammar conflicts.
