@@ -78,23 +78,26 @@ let () =
 
 	(* Create a lexing buffer. *)
 	let lb = Lexing.from_channel f in
-	()
 
-	(*
-	(* TODO *)
 	try
 		(* Parse. *)
 		let ast = Parser.file (Lexer.next_token !debug) lb in
 		close_in f;
 
+		(*
+		TODO
 		(* Print. *)
 		if !print then Format.printf "%a" Printer.print ast;
+		*)
 
 		(* Stop if we only want to parse. *)
 		if !parse_only then exit 0;
 
+		(*
+		TODO
 		(* Type. *)
 		let genv, lenv, tast = Type.typing ast in (* The variables aren't used yet. *)
+		*)
 
 		if !type_only then exit 0;
 
@@ -115,8 +118,10 @@ let () =
 			localisation (Lexing.lexeme_start_p lb);
 			Format.eprintf "Syntax error: %s@.@?" s;
 			exit 1
+		(*
+		TODO
 		| Typ.Type_error s ->
 			localisation (Lexing.lexeme_start_p lb); (* TODO localisation *)
 			Format.eprintf "Type error: %s@.@?" s;
 			exit 1
-	*)
+		*)
