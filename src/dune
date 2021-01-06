@@ -1,0 +1,4 @@
+(executable
+	(preprocess (pps ppx_deriving.show ppx_deriving.ord))
+	(name pjuliac)
+	(flags ()))
