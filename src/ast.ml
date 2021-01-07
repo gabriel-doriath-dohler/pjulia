@@ -125,25 +125,20 @@ and non_loc_lvalue =
 
 type param =
 	{ p_name : ident;
-	p_type : loc * Typ.t; }
+	p_type : Typ.t; }
 [@@deriving show]
 
 type func =
-	{ f_loc : loc;
-	f_name : ident;
+	{ f_name : ident;
+	f_loc : loc;
 	f_params : param list;
-	f_type : loc * Typ.t;
-	f_body : block; }
+	f_type : Typ.t;
+	f_body : block;
+	f_is_constructor : bool;
+	f_mutable : bool; }
 [@@deriving show]
 
-type structure =
-	{ s_loc : loc;
-	s_mut : bool;
-	s_name : ident;
-	s_params : param list; }
-[@@deriving show]
-
-type decl = Structure of structure | Func of func | Expr of expr
+type decl = Func of func | Expr of expr
 [@@deriving show]
 
 type file = decl list

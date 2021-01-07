@@ -77,27 +77,31 @@ file:
 decl:
 	| e=expr Tsemicolon	{ Expr e }
 	| f=func			{ Func f }
-	| s=structure		{ Structure s }
+	| f=structure		{ Func f }
 
 structure:
 	| l=Tmutable z=Tstruct name=Tident params=param_list Tend Tsemicolon
-		{ { s_loc=l; s_mut=true; s_name=name; s_params=params } }
+		{ { f_loc=l; f_name=name; f_params=params; f_type=Typ.Struct name;
+		f_body=[]; f_is_constructor=true; f_mutable=true } }
 	| l=Tstruct name=Tident params=param_list Tend Tsemicolon
-		{ { s_loc=l; s_mut=false; s_name=name; s_params=params } }
+		{ { f_loc=l; f_name=name; f_params=params; f_type=Typ.Struct name;
+		f_body=[]; f_is_constructor=true; f_mutable=false } }
 
 func:
 	| l=Tfunction name=Tident_lpar params=separated_list(Tcomma, param)
 		Trpar Tdoublecolon typ=Tident b=block Tend Tsemicolon
-  		{ { f_loc=l; f_name=name; f_params=params; f_type=(fst typ, Typ.of_string typ); f_body=b } }
+  		{ { f_loc=l; f_name=name; f_params=params; f_type=Typ.of_string typ; f_body=b;
+		f_is_constructor=false; f_mutable=false } }
 	| l=Tfunction name=Tident_lpar params=separated_list(Tcomma, param)
 		Trpar b=block Tend Tsemicolon
-  		{ { f_loc=l; f_name=name; f_params=params; f_type=(empty_loc, Typ.Any); f_body=b } }
+  		{ { f_loc=l; f_name=name; f_params=params; f_type=Typ.Any; f_body=b;
+		f_is_constructor=false; f_mutable=false } }
 
 param:
 	| name=Tident
-		{ { p_name=name; p_type=(empty_loc, Typ.Any) } }
+		{ { p_name=name; p_type=Typ.Any } }
 	| name=Tident Tdoublecolon typ=Tident
-		{ { p_name=name; p_type=(fst typ, Typ.of_string typ) } }
+		{ { p_name=name; p_type=Typ.of_string typ } }
 
 param_list:
 	| 									{ [] }
