@@ -7,12 +7,12 @@ let bindings = Imap.add "nothing" Typ.Nothing Imap.empty
 
 (* Set of declared types. *)
 let declared_types:((Typ.t, unit) Hashtbl.t) = Hashtbl.create 16
-List.iter
+let () = List.iter
 	(fun t -> Hashtbl.add declared_types t ())
 	[ Typ.Any; Typ.Nothing; Typ.Int64; Typ.Bool; Typ.String; ]
 
 (* Map a function name to its definition. *)
-let fonctions:((string, tfunc) Hashtbl.t) = Hashtbl.create 16
+let functions:((string, tfunc) Hashtbl.t) = Hashtbl.create 16
 let declared_functions:((string, unit) Hashtbl.t) = Hashtbl.create 16
 
 (* Keep the informations about the fields. *)
@@ -28,6 +28,9 @@ let add_var name typ env =
 
 let type_of name env =
 	Imap.find name env
+
+let is_var_defined name env =
+	Imap.mem name env
 
 (* For types. *)
 let declare_type typ_name =
@@ -51,7 +54,7 @@ let is_field_mutable field_name =
 	Hashtbl.find h_is_field_mutable field_name
 
 let type_of_field field_name =
-	Hashtbl.find h_typ_of_field field_name
+	Hashtbl.find h_type_of_field field_name
 
 let struct_name_of_field field_name =
 	Hashtbl.find h_struct_name_of_field field_name
