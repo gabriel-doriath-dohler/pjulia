@@ -90,11 +90,8 @@ let () =
 		(* Stop if we only want to parse. *)
 		if !parse_only then exit 0;
 
-		(*
-		TODO
 		(* Type. *)
-		let genv, lenv, tast = Type.typing ast in
-		*)
+		let genv, tast = Type.typing ast in
 
 		if !type_only then exit 0;
 
