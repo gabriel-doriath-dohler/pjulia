@@ -1,1 +1,1 @@
-struct div a b end
+struct div a end

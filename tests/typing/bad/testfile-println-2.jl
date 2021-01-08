@@ -1,1 +1,1 @@
-struct println a div b end
+struct println a; div; b end
