@@ -81,10 +81,10 @@ decl:
 
 structure:
 	| l=Tmutable z=Tstruct name=Tident params=param_list Tend Tsemicolon
-		{ { f_loc=l; f_name=name; f_params=params; f_type=Typ.Struct name;
+		{ { f_loc=l; f_name=name; f_params=params; f_type=Typ.Struct (snd name);
 		f_body=[]; f_is_constructor=true; f_mutable=true } }
 	| l=Tstruct name=Tident params=param_list Tend Tsemicolon
-		{ { f_loc=l; f_name=name; f_params=params; f_type=Typ.Struct name;
+		{ { f_loc=l; f_name=name; f_params=params; f_type=Typ.Struct (snd name);
 		f_body=[]; f_is_constructor=true; f_mutable=false } }
 
 func:

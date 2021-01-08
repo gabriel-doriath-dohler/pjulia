@@ -20,7 +20,7 @@ type ident = loc * string
 
 (* Types. *)
 module Typ = struct
-	type t = Any | Nothing | Int64 | Bool | String | Struct of ident
+	type t = Any | Nothing | Int64 | Bool | String | Struct of string
 	[@@deriving show]
 
 	let compare = compare
@@ -33,20 +33,20 @@ module Typ = struct
 			| Int64		-> "Int64"
 			| Bool		-> "Bool"
 			| String	-> "String"
-			| Struct s	-> sprintf "Struct %s" (snd s))
+			| Struct s	-> sprintf "Struct %s" s)
 
 	let rec print_list fmt = function
 		| []		-> ()
 		| [t]		-> print fmt t
 		| t :: l	-> fprintf fmt "%a, " print t; print_list fmt l
 
-	let of_string (l, typ) = match typ with
+	let of_string (_, typ) = match typ with
 			| "Any"		-> Any
 			| "Nothing"	-> Nothing
 			| "Int64"	-> Int64
 			| "Bool"	-> Bool
 			| "String"	-> String
-			| s			-> Struct (l, s)
+			| s			-> Struct s
 
 	(* Error handeling. *)
 	exception Type_error of loc * string
