@@ -3,7 +3,10 @@ open Ast
 
 module Imap = Map.Make(String)
 
-type texpr = loc * non_loc_texpr
+type texpr =
+	{ te_loc : loc;
+	te_e : non_loc_texpr;
+	te_type : Typ.t; }
 
 and non_loc_texpr =
 	(* Constants. *)
@@ -28,28 +31,33 @@ and non_loc_texpr =
 	| TWhile of texpr_while
 	| TIf of texpr * tblock * telse_block
 
-and texpr_for = loc * non_loc_texpr_for
-
-and non_loc_texpr_for =
-	{ for_expr : ident * texpr * texpr * tblock;
+and texpr_for =
+	{ for_loc : loc;
+	for_expr : ident * texpr * texpr * tblock;
 	for_env : Typ.t Imap.t; }
 
-and texpr_while = loc * non_loc_texpr_while
-
-and non_loc_texpr_while =
-	{ while_expr : texpr * tblock;
+and texpr_while =
+	{ while_loc : loc;
+	while_expr : texpr * tblock;
 	while_env : Typ.t Imap.t; }
 
-and telse_block = loc * non_loc_telse_block
+and telse_block =
+	{ else_loc : loc;
+	else_b : non_loc_telse_block; }
 
 and non_loc_telse_block =
 	| TEnd
 	| TElse of tblock
 	| TElseif of texpr * tblock * telse_block
 
-and tblock = texpr list
+and tblock =
+	{ block_type : Typ.t;
+	block_b : texpr list; }
 
-and tlvalue = loc * non_loc_tlvalue
+and tlvalue =
+	{ lvalue_loc : loc;
+	lvalue_type : Typ.t;
+	lvalue_lvalue : non_loc_tlvalue; }
 
 and non_loc_tlvalue =
 	| TVar of ident

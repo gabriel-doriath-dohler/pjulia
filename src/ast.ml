@@ -20,7 +20,7 @@ type ident = loc * string
 
 (* Types. *)
 module Typ = struct
-	type t = Any | Nothing | Int64 | Bool | String | Struct of string
+	type t = Any | Nothing | Int64 | Bool | Str | Struct of string
 	[@@deriving show]
 
 	let compare = compare
@@ -32,7 +32,7 @@ module Typ = struct
 			| Nothing	-> "Nothing"
 			| Int64		-> "Int64"
 			| Bool		-> "Bool"
-			| String	-> "String"
+			| Str		-> "String"
 			| Struct s	-> sprintf "Struct %s" s)
 
 	let rec print_list fmt = function
@@ -45,7 +45,7 @@ module Typ = struct
 			| "Nothing"	-> Nothing
 			| "Int64"	-> Int64
 			| "Bool"	-> Bool
-			| "String"	-> String
+			| "String"	-> Str
 			| s			-> Struct s
 
 	(* Error handeling. *)

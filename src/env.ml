@@ -9,7 +9,7 @@ let bindings = Imap.add "nothing" Typ.Nothing Imap.empty
 let declared_types:((Typ.t, unit) Hashtbl.t) = Hashtbl.create 16
 let () = List.iter
 	(fun t -> Hashtbl.add declared_types t ())
-	[ Typ.Any; Typ.Nothing; Typ.Int64; Typ.Bool; Typ.String; ]
+	[ Typ.Any; Typ.Nothing; Typ.Int64; Typ.Bool; Typ.Str; ]
 
 (* Map a function name to its definition. *)
 let functions:((string, tfunc) Hashtbl.t) = Hashtbl.create 16
@@ -76,7 +76,7 @@ let add_structure f =
 		tf_loc = f.f_loc;
 		tf_params = f.f_params;
 		tf_type = f.f_type;
-		tf_body = [];
+		tf_body = { block_type = Typ.Nothing; block_b = []; };
 		tf_is_constructor = f.f_is_constructor;
 		tf_mutable = mut;
 		tf_env = Imap.empty; } in

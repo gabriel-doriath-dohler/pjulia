@@ -103,12 +103,54 @@ let rec type1 env = function
 
 (* Second part. *)
 
-let type2 env = function
+let empty_texpr =
+	{ te_loc = { l_start = -1; l_end = -1; c_start = -1; c_end = -1; };
+	te_e = TPar { block_type = Typ.Nothing; block_b = [] };
+	te_type = Typ.Nothing; }
+
+let rec type2_expr env e =
+	let te, typ = match snd e with
+		(* Constants. *)
+		| Int n -> TInt n, Typ.Int64
+		| Str s -> TStr s, Typ.Str
+		| Bool b -> TBool b, Typ.Bool
+
+		(* Expressions with parantheses. *)
+		| Par b -> let tb = type2_block env b in TPar tb, tb.block_type
+		(* | Call (name, args) -> TCall (name, type2_args env args) TODO *)
+
+		(* Operations. *)
+		| Not e ->
+			let te = type2_expr env e in
+			Typ.assert_compatible te.te_loc te.te_type Typ.Bool;
+			TNot te, Typ.Bool
+		| _ -> empty_texpr.te_e, Typ.Nothing (* TODO *)
+
+	in { te_loc = fst e; te_e = te; te_type = typ; }
+
+and type2_block env = function
+	| []		-> { block_b = [empty_texpr]; block_type = Typ.Nothing; }
+	| e :: b	->
+		let te = type2_expr env e in
+		let tb = type2_block env b in
+		if List.length tb.block_b = 0 then
+			{ block_b = [te]; block_type = te.te_type; }
+		else
+			{ block_b = te :: tb.block_b; block_type = tb.block_type; }
+
+(*
+and type2_args env args =
+	(* TODO *)
+*)
+
+let rec type2 env = function
 	(* Construct the local environment of each function/while loop/for loop.
 	Verify that all return instructions on a function have a type compatible with the return type.
 	Verify that all function/while loop/for loop bodies are well typed.
 	Verify that global expressions are well typed. *)
-	| _ -> [] (* TODO *)
+	| []			-> []
+	| Func f :: l	-> type2 env l (* TODO *)
+	| Expr e :: l	-> TExpr (type2_expr env e) :: type2 env l (* /!\ Its not a tail recursive call. *)
 
 (* Part 1 & part 2. *)
 
