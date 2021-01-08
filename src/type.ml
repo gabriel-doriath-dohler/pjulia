@@ -124,7 +124,7 @@ let rec type2_expr env e =
 			let te = type2_expr env e in
 			Typ.assert_compatible te.te_loc te.te_type Typ.Bool;
 			TNot te, Typ.Bool
-		| Binop (e1, op, e2) -> (* TODO *)
+		| Binop (e1, op, e2) ->
 			let te1 = type2_expr env e1 in
 			let te2 = type2_expr env e2 in
 			let t1 = te1.te_type in
@@ -154,7 +154,16 @@ let rec type2_expr env e =
 
 		(*
 		| Lval -> (* TODO *)
-		| Affect -> (* TODO *)
+		*)
+		| Affect ((l_lval, Var (l_var, var)), e1) ->
+			let t = Env.type_of var env in
+			let te1 = type2_expr env e1 in
+			Typ.assert_subtype te1.te_loc te1.te_type t;
+			TAffect ({ lvalue_loc = l_lval;
+				lvalue_type = t;
+				lvalue_lvalue = TVar (l_var, var); }, te1), te1.te_type
+		(*
+		| Affect ((l_lval, Field (e1 , (l_field, field))), e2) ->
 		| Return -> (* TODO *)
 
 		(* Control structures. *)
@@ -162,12 +171,12 @@ let rec type2_expr env e =
 		| While -> (* TODO *)
 		| If -> (* TODO *)
 		*)
-		| _ -> empty_texpr.te_e, Typ.Nothing (* TODO *)
+		| _ -> empty_texpr.te_e, Typ.Any (* TODO *)
 
 	in { te_loc = fst e; te_e = te; te_type = typ; }
 
 and type2_block env = function
-	| []		-> { block_b = [empty_texpr]; block_type = Typ.Nothing; }
+	| []		-> { block_b = []; block_type = Typ.Nothing; }
 	| e :: b	->
 		let te = type2_expr env e in
 		let tb = type2_block env b in
