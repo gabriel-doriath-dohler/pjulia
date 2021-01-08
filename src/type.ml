@@ -124,6 +124,44 @@ let rec type2_expr env e =
 			let te = type2_expr env e in
 			Typ.assert_compatible te.te_loc te.te_type Typ.Bool;
 			TNot te, Typ.Bool
+		| Binop (e1, op, e2) -> (* TODO *)
+			let te1 = type2_expr env e1 in
+			let te2 = type2_expr env e2 in
+			let t1 = te1.te_type in
+			let t2 = te2.te_type in
+			let l1 = te1.te_loc in
+			let l2 = te2.te_loc in
+			(TBinop (te1, op, te2), match op with
+				| Eq | Neq -> Typ.Bool
+				| Add | Sub | Mul | Mod | Pow ->
+					Typ.assert_compatible l1 t1 Typ.Int64;
+					Typ.assert_compatible l2 t2 Typ.Int64;
+					Typ.Int64
+				| L | Leq | G | Geq ->
+					if t1 <> Typ.Any && t1 <> Typ.Int64 && t1 <> Typ.Bool then
+						Typ.type_error l1 (asprintf
+							"This expression as type %a but an expression was expected of type Any, Int64 or Bool."
+							Typ.print t1);
+					if t2 <> Typ.Any && t2 <> Typ.Int64 && t2 <> Typ.Bool then
+						Typ.type_error l2 (asprintf
+							"This expression as type %a but an expression was expected of type Any, Int64 or Bool."
+							Typ.print t2);
+					Typ.Bool
+				| And | Or ->
+					Typ.assert_compatible l1 t1 Typ.Bool;
+					Typ.assert_compatible l2 t2 Typ.Bool;
+					Typ.Bool)
+
+		(*
+		| Lval -> (* TODO *)
+		| Affect -> (* TODO *)
+		| Return -> (* TODO *)
+
+		(* Control structures. *)
+		| For -> (* TODO *)
+		| While -> (* TODO *)
+		| If -> (* TODO *)
+		*)
 		| _ -> empty_texpr.te_e, Typ.Nothing (* TODO *)
 
 	in { te_loc = fst e; te_e = te; te_type = typ; }
