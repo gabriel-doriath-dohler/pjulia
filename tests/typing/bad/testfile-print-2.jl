@@ -1,0 +1,1 @@
+struct print end
