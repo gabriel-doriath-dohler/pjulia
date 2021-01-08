@@ -53,17 +53,28 @@ module Typ = struct
 	let type_error l s = raise (Type_error (l, s))
 
 	let compat_error l t1 t2 = type_error l (asprintf
-		"This expression has type %a but an expression was expected of type %a."
+		"This expression has type %a but an expression was expected of type compatible with %a."
 		print t1 print t2)
 
 	(* Check the compatibility of t1 and t2. *)
 	let are_compatible t1 t2 =
 		t1 = t2 || t1 = Any || t2 = Any
 
-	(* Check the compatibility of t1 and t2. *)
+	(* Check if t1 is a subtype of t2. *)
+	let is_subtype t1 t2 =
+		t2 = Any || t1 = t2
+
+	(* Assert the compatibility of t1 and t2. *)
 	let assert_compatible l t1 t2 =
 		if not (are_compatible t1 t2) then
 			compat_error l t1 t2
+
+	(* Assert that t1 is a subtype of t2. *)
+	let assert_subtype l t1 t2 =
+		if not (is_subtype t1 t2) then
+			type_error l (asprintf
+				"This expression has type %a but its type should be a subtype of %a."
+				print t1 print t2)
 
 	(* Returns the type t1 and t2 must be to be compatible. *)
 	let common_type l t1 t2 = match t1, t2 with
