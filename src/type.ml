@@ -192,8 +192,18 @@ let rec type2_expr env e =
 			TReturn (Some te1), Typ.Any
 
 		(* Control structures. *)
+		| For (idx, e1, e2, b) ->
+			let te1 = type2_expr env e1 in
+			let te2 = type2_expr env e2 in
+			Typ.assert_compatible te1.te_loc te1.te_type Typ.Int64;
+			Typ.assert_compatible te2.te_loc te2.te_type Typ.Int64;
+			let env_idx = Env.add_variable (snd idx) Typ.Int64 env in
+			let lenv = type1_block env_idx b in
+			let tb = type2_block lenv b in
+			TFor { for_loc = fst e;
+				for_expr = (idx, te1, te2, tb);
+				for_env = lenv; }, Typ.Nothing
 		(*
-		| For -> (* TODO *)
 		| While -> (* TODO *)
 		| If -> (* TODO *)
 		*)
