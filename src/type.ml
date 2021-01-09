@@ -186,11 +186,13 @@ let rec type2_expr env e =
 			TAffect ({ lvalue_loc = l_lval;
 				lvalue_type = t;
 				lvalue_lvalue = TField (te1, (l_field, field)); }, te2), t
-
-		(*
-		| Return -> (* TODO *)
+		| Return None -> TReturn None, Typ.Any
+		| Return (Some e1) ->
+			let te1 = type2_expr env e1 in
+			TReturn (Some te1), Typ.Any
 
 		(* Control structures. *)
+		(*
 		| For -> (* TODO *)
 		| While -> (* TODO *)
 		| If -> (* TODO *)
