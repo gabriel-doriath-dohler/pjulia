@@ -203,8 +203,15 @@ let rec type2_expr env e =
 			TFor { for_loc = fst e;
 				for_expr = (idx, te1, te2, tb);
 				for_env = lenv; }, Typ.Nothing
+		| While ((l, e1), b) -> (* TODO *)
+			let te1 = type2_expr env (l, e1) in
+			Typ.assert_compatible l te1.te_type Typ.Bool;
+			let lenv = type1_block env b in
+			let tb = type2_block lenv b in
+			TWhile { while_loc = l;
+				while_expr = (te1, tb);
+				while_env = lenv; }, Typ.Nothing
 		(*
-		| While -> (* TODO *)
 		| If -> (* TODO *)
 		*)
 		| _ -> empty_texpr.te_e, Typ.Any (* TODO *)
