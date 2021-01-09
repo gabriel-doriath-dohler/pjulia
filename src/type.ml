@@ -152,9 +152,21 @@ let rec type2_expr env e =
 					Typ.assert_compatible l2 t2 Typ.Bool;
 					Typ.Bool)
 
-		(*
-		| Lval -> (* TODO *)
-		*)
+		| Lval (l_lval, Var (l_var, var)) ->
+			Env.assert_variable_defined l_var var env;
+			let t = Env.type_of var env in
+			TLval { lvalue_loc = l_lval;
+				lvalue_type = t;
+				lvalue_lvalue = TVar (l_var, var); }, t
+		| Lval (l_lval, Field (e1, (l_field, field))) ->
+			let te1 = type2_expr env e1 in
+			Env.assert_field_defined l_field field;
+			let s = Env.struct_name_of_field field in
+			let t = Env.type_of_field field in
+			Typ.assert_compatible te1.te_loc te1.te_type (Typ.Struct s);
+			TLval { lvalue_loc = l_lval;
+				lvalue_type = t;
+				lvalue_lvalue = TField (te1, (l_field, field)); }, t
 		| Affect ((l_lval, Var (l_var, var)), e1) ->
 			let t = Env.type_of var env in
 			let te1 = type2_expr env e1 in

@@ -32,6 +32,10 @@ let type_of name env =
 let is_variable_defined name env =
 	Imap.mem name env
 
+let assert_variable_defined l name env =
+	if not (is_variable_defined name env) then
+		Typ.type_error l (sprintf "The variable %s isn't defined." name)
+
 (* For types. *)
 let declare_type typ =
 	Hashtbl.replace declared_types typ ()
