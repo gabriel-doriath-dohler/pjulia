@@ -162,8 +162,20 @@ let rec type2_expr env e =
 			TAffect ({ lvalue_loc = l_lval;
 				lvalue_type = t;
 				lvalue_lvalue = TVar (l_var, var); }, te1), te1.te_type
-		(*
 		| Affect ((l_lval, Field (e1 , (l_field, field))), e2) ->
+			let te1 = type2_expr env e1 in
+			let te2 = type2_expr env e2 in
+			Env.assert_field_defined l_field field;
+			let s = Env.struct_name_of_field field in
+			let t = Env.type_of_field field in
+			Typ.assert_compatible te2.te_loc te2.te_type t;
+			Typ.assert_compatible te1.te_loc te1.te_type (Typ.Struct s);
+			Env.assert_mutable l_field field s;
+			TAffect ({ lvalue_loc = l_lval;
+				lvalue_type = t;
+				lvalue_lvalue = TField (te1, (l_field, field)); }, te2), t
+
+		(*
 		| Return -> (* TODO *)
 
 		(* Control structures. *)
