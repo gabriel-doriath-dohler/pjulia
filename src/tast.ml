@@ -16,7 +16,7 @@ and non_loc_texpr =
 
 	(* Expressions with parantheses. *)
 	| TPar of tblock
-	| TCall of ident * tblock
+	| TCall of ident * (texpr list) * (tfunc list)
 
 	(* Operations. *)
 	| TNot of texpr
@@ -54,7 +54,7 @@ and non_loc_tlvalue =
 	| TVar of ident
 	| TField of texpr * ident
 
-type tfunc =
+and tfunc =
 	{ tf_name : ident;
 	tf_loc : loc;
 	tf_params : param list;

@@ -2,6 +2,9 @@ open Ast
 open Tast
 open Format
 
+(* TODO comment *)
+let redef = ref false
+
 (* First part. *)
 
 let type1_func f =
@@ -75,8 +78,9 @@ let rec type1_expr env e = match snd e with
 		type1_expr (type1_expr env e1) e2
 	| Affect ((_, Var (_, var)), e1) ->
 		let var_type =
-			try Env.type_of var env
-			with Not_found -> Typ.Any
+			if !redef then Typ.Any
+			else (try Env.type_of var env
+				with Not_found -> Typ.Any)
 		in
 		Env.add_variable var var_type (type1_expr env e1)
 	| If (e1, b1, b2) -> type1_block (type1_block env (e1 :: b1)) b2
@@ -105,13 +109,37 @@ let empty_texpr =
 let rec type2_expr env e =
 	let te, typ = match snd e with
 		(* Constants. *)
-		| Int n -> TInt n, Typ.Int64
-		| Str s -> TStr s, Typ.Str
-		| Bool b -> TBool b, Typ.Bool
+		| Int n 	-> TInt n, Typ.Int64
+		| Str s		-> TStr s, Typ.Str
+		| Bool b	-> TBool b, Typ.Bool
 
 		(* Expressions with parantheses. *)
 		| Par b -> let tb = type2_block env b in TPar tb, tb.block_type
-		(* | Call (name, args) -> TCall (name, type2_args env args) TODO *)
+		| Call ((l, name), args) ->
+			let targs = List.map (type2_expr env) args in (* TODO *)
+			let f_list, t_ret = (match name with
+				| "div"		-> (match targs with
+					| [a; b; ]	->
+						Typ.assert_compatible a.te_loc a.te_type Typ.Int64;
+						Typ.assert_compatible b.te_loc b.te_type Typ.Int64
+					| _			->
+						Typ.type_error l (sprintf
+							"The function div takes 2 arguments but %d where given." (List.length targs))
+					);
+					[], Typ.Int64
+				| "print"	-> [], Typ.Nothing
+				| _			-> [], Typ.Any
+					(*
+					TODO
+					if unique
+						f, t
+					if multiple
+						, Typ.Any
+					if zero
+						error
+					*)
+				)
+			in TCall ((l, name), targs, f_list), t_ret
 
 		(* Operations. *)
 		| Not e ->
@@ -214,7 +242,6 @@ let rec type2_expr env e =
 				TIf (te1, tb1, tb2), tb1.block_type
 			else
 				TIf (te1, tb1, tb2), Typ.Any
-		| _ -> empty_texpr.te_e, Typ.Any (* TODO *)
 
 	in { te_loc = fst e; te_e = te; te_type = typ; }
 
@@ -233,13 +260,50 @@ and type2_args env args =
 	(* TODO *)
 *)
 
+let assert_return_type tbody typ =
+	let assert_return_type_expr te = match te.te_e with
+		| TReturn None			-> Typ.assert_compatible te.te_loc Typ.Nothing typ
+		| TReturn (Some te1)	-> Typ.assert_compatible te1.te_loc te1.te_type typ
+		| _						-> ()
+	in List.iter assert_return_type_expr tbody.block_b
+
+let type2_func env f =
+	(* Structure. *)
+	if f.f_is_constructor then
+		{ tf_name = f.f_name;
+		tf_loc = f.f_loc;
+		tf_params = f.f_params;
+		tf_type = f.f_type;
+		tf_body = { block_type = Typ.Nothing; block_b = []};
+		tf_is_constructor = f.f_is_constructor;
+		tf_mutable = f.f_mutable;
+		tf_env = Imap.empty; }
+
+	(* Function. *)
+	else begin
+		let env_param = List.fold_left
+			(fun e -> fun p -> Env.add_variable (snd p.p_name) p.p_type e) env f.f_params in
+		let lenv = type1_block env_param f.f_body in
+		let tb = type2_block lenv f.f_body in
+		Typ.assert_compatible f.f_loc tb.block_type f.f_type; (* TODO loc *)
+		assert_return_type tb f.f_type;
+		{ tf_name = f.f_name;
+		tf_loc = f.f_loc;
+		tf_params = f.f_params;
+		tf_type = f.f_type;
+		tf_body = tb;
+		tf_is_constructor = f.f_is_constructor;
+		tf_mutable = f.f_mutable;
+		tf_env = lenv; }
+	end
+
 let rec type2 env = function
 	(* Construct the local environment of each function/while loop/for loop.
 	Verify that all return instructions on a function have a type compatible with the return type.
 	Verify that all function/while loop/for loop bodies are well typed.
 	Verify that global expressions are well typed. *)
 	| []			-> []
-	| Func f :: l	-> type2 env l (* TODO *)
+	| Func f :: l	-> TFunc (type2_func env f) :: type2 env l
 	| Expr e :: l	-> TExpr (type2_expr env e) :: type2 env l (* /!\ Its not a tail recursive call. *)
 
 (* Part 1 & part 2. *)
@@ -247,6 +311,7 @@ let rec type2 env = function
 let typing ast =
 	(* Construct the typed ast, the global environment, the local environments and type check. *)
 	let genv = type1 Env.bindings ast in
+	redef := true;
 	let tast = type2 genv ast in
 	genv, tast
 
