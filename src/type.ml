@@ -79,14 +79,8 @@ let rec type1_expr env e = match snd e with
 			with Not_found -> Typ.Any
 		in
 		Env.add_variable var var_type (type1_expr env e1)
-	| If (e1, b, eb) -> type1_else_block (type1_block env (e1 :: b)) eb
+	| If (e1, b1, b2) -> type1_block (type1_block env (e1 :: b1)) b2
 	| _ -> env
-
-and type1_else_block env eb = match snd eb with
-	(* Add the global variables to the environment. *)
-	| End					-> env
-	| Else b				-> type1_block env b
-	| Elseif (e, b, eb1)	-> type1_else_block (type1_block env (e :: b)) eb1
 
 and type1_block env =
 	(* Add the global variables to the environment. *)
@@ -203,7 +197,7 @@ let rec type2_expr env e =
 			TFor { for_loc = fst e;
 				for_expr = (idx, te1, te2, tb);
 				for_env = lenv; }, Typ.Nothing
-		| While ((l, e1), b) -> (* TODO *)
+		| While ((l, e1), b) ->
 			let te1 = type2_expr env (l, e1) in
 			Typ.assert_compatible l te1.te_type Typ.Bool;
 			let lenv = type1_block env b in
@@ -211,9 +205,15 @@ let rec type2_expr env e =
 			TWhile { while_loc = l;
 				while_expr = (te1, tb);
 				while_env = lenv; }, Typ.Nothing
-		(*
-		| If -> (* TODO *)
-		*)
+		| If (e1, b1, b2) ->
+			let te1 = type2_expr env e1 in
+			let tb1 = type2_block env b1 in
+			let tb2 = type2_block env b2 in
+			Typ.assert_compatible te1.te_loc te1.te_type Typ.Bool;
+			if tb1.block_type = tb2.block_type then
+				TIf (te1, tb1, tb2), tb1.block_type
+			else
+				TIf (te1, tb1, tb2), Typ.Any
 		| _ -> empty_texpr.te_e, Typ.Any (* TODO *)
 
 	in { te_loc = fst e; te_e = te; te_type = typ; }

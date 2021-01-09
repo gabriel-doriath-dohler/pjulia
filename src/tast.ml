@@ -29,7 +29,7 @@ and non_loc_texpr =
 	(* Control structures. *)
 	| TFor of texpr_for
 	| TWhile of texpr_while
-	| TIf of texpr * tblock * telse_block
+	| TIf of texpr * tblock * tblock
 
 and texpr_for =
 	{ for_loc : loc;
@@ -40,15 +40,6 @@ and texpr_while =
 	{ while_loc : loc;
 	while_expr : texpr * tblock;
 	while_env : Typ.t Imap.t; }
-
-and telse_block =
-	{ else_loc : loc;
-	else_b : non_loc_telse_block; }
-
-and non_loc_telse_block =
-	| TEnd
-	| TElse of tblock
-	| TElseif of texpr * tblock * telse_block
 
 and tblock =
 	{ block_type : Typ.t;

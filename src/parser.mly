@@ -168,11 +168,11 @@ expr_with_uminus:
 	| e=expr_without_uminus Tdot id=Tident	{ fst e, Field (e, id) }
 
 else_block:
-	| Tend									{ empty_loc, End }
-	| l=Telse b=block Tend					{ l, Else b }
+	| Tend									{ [] }
+	| l=Telse b=block Tend					{ b }
 	| z=Telse zz=Tif %prec else_if_error	{ Ast.syntax_error "The token if can't follow else." }
 	| l=Telseif e=expr b1=block_without_uminus b2=else_block
-		{ l, Else [l, If (e, b1, b2)] }
+		{ [l, If (e, b1, b2)] }
 
 %inline op:
 	(* Tests. *)

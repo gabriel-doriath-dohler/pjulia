@@ -111,16 +111,7 @@ and non_loc_expr =
 	(* Control structures. *)
 	| For of ident * expr * expr * block
 	| While of expr * block
-	| If of expr * block * else_block
-[@@deriving show]
-
-and else_block = loc * non_loc_else_block
-[@@deriving show]
-
-and non_loc_else_block =
-	| End
-	| Else of block
-	| Elseif of expr * block * else_block
+	| If of expr * block * block
 [@@deriving show]
 
 and block = expr list
