@@ -21,7 +21,7 @@ let debug = ref false
 let nb_rand_test = ref 0
 
 (* Compilation options. Can be printed with --help.*)
-let usage = "Usage: pjuilac [option] file.jl"
+let usage = "Usage: pjuliac [option] file.jl"
 let options = [
 	("--parse-only", Arg.Set parse_only, "Do just the parsing.");
 	("--type-only", Arg.Set type_only, "Do just the parsing and typing");
