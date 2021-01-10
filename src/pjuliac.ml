@@ -100,19 +100,22 @@ let () =
 		(* Compile. *)
 
 	with
-		| Lexer.Lexing_error s ->
+		| Lexer.Lexing_error s	->
 			print_localisation (current_loc lb);
 			Format.eprintf "Lexical error: %s@.@?" s;
 			exit 1
-		| Parser.Error ->
+		| Parser.Error			->
 			print_localisation (current_loc lb);
 			Format.eprintf "Syntax error.@.@?";
 			exit 1
-		| Ast.Syntax_error s ->
+		| Ast.Syntax_error s	->
 			print_localisation (current_loc lb);
 			Format.eprintf "Syntax error: %s@.@?" s;
 			exit 1
-		| Typ.Type_error (l, s) ->
+		| Typ.Type_error (l, s)	->
 			print_localisation l;
 			Format.eprintf "Type error: %s@.@?" s;
 			exit 1
+		| _						->
+			print_string "Unexpected error of the compiler.";
+			exit 2
