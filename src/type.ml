@@ -46,16 +46,14 @@ let type1_func f =
 				(sprintf
 					"The structure %s has multiple definitions or a function has the same name."
 					name);
-		(* Declare the type defined by the structure. *)
-		Env.declare_type (Typ.Struct name);
 		(* Verify that the fields are not already used. *)
 		let verify_field p =
 			if Env.is_field_defined (snd p.p_name) then
 				Typ.type_error (fst p.p_name) (sprintf
 					"The field %s is already used." (snd p.p_name))
 		in List.iter verify_field f.f_params;
-		(* Add the structure and its fields. *)
-		Env.add_structure f;
+		(* Add the structure, its type and its fields. *)
+		Env.add_structure name f.f_params f.f_mutable;
 
 	(* Function. *)
 	end else begin
@@ -64,8 +62,8 @@ let type1_func f =
 			Typ.type_error f.f_loc (sprintf
 				"A structure has already the name %s. Functions can't have the same name as a structure."
 				name);
-		(* Declare the function. *)
-		Env.declare_function name;
+		(* Add the function. *)
+		Env.add_function name f.f_params f.f_type f.f_mutable
 	end
 
 let rec type1_expr env e = match snd e with
@@ -106,6 +104,15 @@ let empty_texpr =
 	te_e = TPar { block_type = Typ.Nothing; block_b = [] };
 	te_type = Typ.Nothing; }
 
+let type2_div l targs = (match targs with
+	| [ a; b; ] ->
+		Typ.assert_compatible a.te_loc a.te_type Typ.Int64;
+		Typ.assert_compatible b.te_loc b.te_type Typ.Int64
+	| _			->
+		Typ.type_error l (sprintf
+			"The function div takes 2 arguments but %d where given." (List.length targs)));
+	[], Typ.Int64
+
 let rec type2_expr env e =
 	let te, typ = match snd e with
 		(* Constants. *)
@@ -116,29 +123,18 @@ let rec type2_expr env e =
 		(* Expressions with parantheses. *)
 		| Par b -> let tb = type2_block env b in TPar tb, tb.block_type
 		| Call ((l, name), args) ->
-			let targs = List.map (type2_expr env) args in (* TODO *)
+			let targs = List.map (type2_expr env) args in
 			let f_list, t_ret = (match name with
-				| "div"		-> (match targs with
-					| [a; b; ]	->
-						Typ.assert_compatible a.te_loc a.te_type Typ.Int64;
-						Typ.assert_compatible b.te_loc b.te_type Typ.Int64
-					| _			->
-						Typ.type_error l (sprintf
-							"The function div takes 2 arguments but %d where given." (List.length targs))
-					);
-					[], Typ.Int64
+				| "div"		-> type2_div l targs
 				| "print"	-> [], Typ.Nothing
-				| _			-> [], Typ.Any
-					(*
-					TODO
-					if unique
-						f, t
-					if multiple
-						, Typ.Any
-					if zero
-						error
-					*)
-				)
+				| _			->
+					let t_list = List.map (fun x -> x.te_type) targs in
+					let f_list = Env.compatible_functions name t_list in
+					if List.length f_list = 0 then
+						Typ.type_error l (sprintf "There is no function or constructor named %s." name);
+					f_list, match f_list with
+						| [(_, t)]	-> t
+						| _			-> Typ.Any)
 			in TCall ((l, name), targs, f_list), t_ret
 
 		(* Operations. *)
@@ -255,11 +251,6 @@ and type2_block env = function
 		else
 			{ block_b = te :: tb.block_b; block_type = tb.block_type; }
 
-(*
-and type2_args env args =
-	(* TODO *)
-*)
-
 let assert_return_type tbody typ =
 	let assert_return_type_expr te = match te.te_e with
 		| TReturn None			-> Typ.assert_compatible te.te_loc Typ.Nothing typ
@@ -287,14 +278,17 @@ let type2_func env f =
 		let tb = type2_block lenv f.f_body in
 		Typ.assert_compatible f.f_loc tb.block_type f.f_type; (* TODO loc *)
 		assert_return_type tb f.f_type;
-		{ tf_name = f.f_name;
-		tf_loc = f.f_loc;
-		tf_params = f.f_params;
-		tf_type = f.f_type;
-		tf_body = tb;
-		tf_is_constructor = f.f_is_constructor;
-		tf_mutable = f.f_mutable;
-		tf_env = lenv; }
+		let tf =
+			{ tf_name = f.f_name;
+			tf_loc = f.f_loc;
+			tf_params = f.f_params;
+			tf_type = f.f_type;
+			tf_body = tb;
+			tf_is_constructor = f.f_is_constructor;
+			tf_mutable = f.f_mutable;
+			tf_env = lenv; } in
+		Env.add_tfunction tf;
+		tf
 	end
 
 let rec type2 env = function

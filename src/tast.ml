@@ -16,7 +16,7 @@ and non_loc_texpr =
 
 	(* Expressions with parantheses. *)
 	| TPar of tblock
-	| TCall of ident * (texpr list) * (tfunc list)
+	| TCall of ident * (texpr list) * ((Typ.t list * Typ.t)  list)
 
 	(* Operations. *)
 	| TNot of texpr

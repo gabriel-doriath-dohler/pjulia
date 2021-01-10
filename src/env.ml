@@ -13,8 +13,8 @@ let () = List.iter
 	[ Typ.Any; Typ.Nothing; Typ.Int64; Typ.Bool; Typ.Str; ]
 
 (* Map a function name to its definition. *)
-let functions:((string, tfunc) Hashtbl.t) = Hashtbl.create 16
-let declared_functions:((string, unit) Hashtbl.t) = Hashtbl.create 16
+let tfunctions:((string, tfunc) Hashtbl.t) = Hashtbl.create 16
+let func:((string, (Typ.t list * Typ.t * bool)) Hashtbl.t) = Hashtbl.create 16
 
 (* Keep the informations about the fields. *)
 let h_struct_name_of_field:((string, string) Hashtbl.t) = Hashtbl.create 16
@@ -44,14 +44,24 @@ let is_type_defined =
 	Hashtbl.mem declared_types
 
 (* For functions. *)
-let declare_function name =
-	Hashtbl.replace declared_functions name ()
+let add_function name arguments return_type mut =
+	let arguments_type_list = List.map (fun p -> p.p_type) arguments in
+	Hashtbl.add func name (arguments_type_list, return_type, mut)
 
-let add_function name tfunction =
-	Hashtbl.add functions name tfunction
+let add_tfunction tfunction =
+	Hashtbl.add tfunctions (snd tfunction.tf_name) tfunction
 
 let is_function_defined name =
-	Hashtbl.mem functions name
+	Hashtbl.mem func name
+
+let is_function_compatible t_list (arguments_type, return_type) =
+	List.for_all2 Typ.are_compatible arguments_type t_list
+
+let compatible_functions name t_list =
+	let f_list = List.map
+		(fun (arguments_type, return_type, _) -> (arguments_type, return_type))
+		(Hashtbl.find_all func name) in
+	List.filter (is_function_compatible t_list) f_list
 
 (* For fields. *)
 let is_field_defined field_name =
@@ -76,31 +86,21 @@ let assert_field_defined l field_name =
 		Typ.type_error l (sprintf "The field %s is undefined." field_name)
 
 (* For structures. *)
-let add_structure f =
-	let name = snd f.f_name in
-	let tfunction =
-		{ tf_name = f.f_name;
-		tf_loc = f.f_loc;
-		tf_params = f.f_params;
-		tf_type = f.f_type;
-		tf_body = { block_type = Typ.Nothing; block_b = []; };
-		tf_is_constructor = f.f_is_constructor;
-		tf_mutable = f.f_mutable;
-		tf_env = Imap.empty; } in
-	add_function name tfunction;
+let add_structure name arguments mut =
+	declare_type (Typ.Struct name);
+	add_function name arguments (Typ.Struct name) mut;
 	List.iter
 		(fun p -> add_field (snd p.p_name) name p.p_type)
-		tfunction.tf_params
+		arguments
 
 let is_structure_defined name =
 	Hashtbl.mem declared_types (Typ.Struct name)
 
 let structure_from_name name =
-	Hashtbl.find functions name
+	Hashtbl.find func name
 
-let is_mutable name =
-	let s = structure_from_name name in
-	s.tf_mutable
+let is_mutable name = match structure_from_name name with
+	| _, _, mut -> mut
 
 let assert_mutable l field_name struct_name =
 	if not (is_mutable struct_name) then
