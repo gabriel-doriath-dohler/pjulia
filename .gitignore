@@ -3,3 +3,5 @@ sujet-v2.pdf
 src/.merlin
 _build
 pjuliac
+a.out
+tests/test.s

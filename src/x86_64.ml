@@ -8,7 +8,7 @@ open Format
 
 type size = [`B | `W | `L | `Q]
 
-type 'size register =  string
+type 'size register = string
 
 let rax = "%rax"
 let rbx = "%rbx"

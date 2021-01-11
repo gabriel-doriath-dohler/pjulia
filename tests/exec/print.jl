@@ -1,0 +1,6 @@
+println("yo", "lo")
+println("Hello, world!")
+println("string ", 42)
+println(true, false)
+print(4, 2)
+print(42)

@@ -1,5 +1,7 @@
 all: pjuliac.exe
 	./pjuliac tests/test.jl
+	gcc -no-pie tests/test.s
+	./a.out
 
 pjuliac.exe:
 	dune build src/pjuliac.exe

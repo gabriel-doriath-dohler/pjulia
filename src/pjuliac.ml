@@ -1,5 +1,6 @@
 open Lexing
 open Ast
+open Format
 
 (* Name of the input file. *)
 let file = ref ""
@@ -81,11 +82,9 @@ let () =
 		let ast = Parser.file (Lexer.next_token !debug) lb in
 		close_in f;
 
-		(*
-		TODO
 		(* Print. *)
-		if !print then Format.printf "%a" Printer.print ast;
-		*)
+		(* if !print then Format.printf "%a" Printer.print ast; TODO *)
+		if !print then printf "%s@.@?" (show_file ast);
 
 		(* Stop if we only want to parse. *)
 		if !parse_only then exit 0;
@@ -95,9 +94,9 @@ let () =
 
 		if !type_only then exit 0;
 
-		(* Interpret. *)
-
 		(* Compile. *)
+		let ofile = (Filename.remove_extension !file) ^ ".s" in
+		Gen.gen tast ofile;
 
 	with
 		| Lexer.Lexing_error s	->
