@@ -279,7 +279,7 @@ let setbe a = ins "setbe %a" a ()
 let label (s : label) = S (asprintf "%a:\n" mangle s)
 let globl (s: label) = S (asprintf "\t.globl\t%a\n" mangle s)
 
-let comment s = S ("#" ^ s ^ "\n")
+let comment s = S ("# " ^ s ^ "\n")
 
 let align n = ins ".align %i" n
 
@@ -316,4 +316,5 @@ let print_in_file ~file p =
   let c = open_out file in
   let fmt = formatter_of_out_channel c in
   print_program fmt p;
+  fprintf fmt "@?"; (* Flush the buffer. *)
   close_out c

@@ -5,3 +5,5 @@ _build
 pjuliac
 a.out
 tests/test.s
+out
+*.s

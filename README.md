@@ -15,3 +15,5 @@
 - `make vtest1`: Run the parsing tests (verbose).
 - `make test2`: Run the typing tests.
 - `make vtest2`: Run the typing tests (verbose).
+- `make test3`: Run the compiling tests.
+- `make vtest3`: Run the compiling tests (verbose).

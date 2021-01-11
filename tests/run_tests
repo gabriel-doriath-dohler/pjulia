@@ -148,9 +148,9 @@ timeout="why3-cpulimit 30 0 -h"
 
 for f in tests/exec/*.jl; do
     echo -n "."
-    asm=exec/`basename $f .jl`.s
+    asm=tests/exec/`basename $f .jl`.s
     rm -f $asm
-    expected=exec/`basename $f .jl`.out
+    expected=tests/exec/`basename $f .jl`.out
     max=`expr $max + 1`;
     if compile $f; then
 	rm -f out
@@ -179,7 +179,7 @@ echo "-------------------------------"
 
 for f in tests/exec-fail/*.jl; do
     echo -n "."
-    asm=exec-fail/`basename $f .jl`.s
+    asm=tests/exec-fail/`basename $f .jl`.s
     rm -f $asm
     max=`expr $max + 1`;
     if compile $f && gcc -no-pie $asm; then
@@ -223,7 +223,7 @@ timeout="why3-cpulimit 30 0 -h"
 
 for f in tests/exec/*.jl; do
     echo -n "."
-    expected=exec/`basename $f .jl`.out
+    expected=tests/exec/`basename $f .jl`.out
     max=`expr $max + 1`;
     rm -f out
     if $compilo $f > out; then
@@ -272,15 +272,20 @@ case $option in
 	verbose=1;
 	partie1;;
     "-v2" )
-    	verbose=1;
+        verbose=1;
         partie2;;
     "-v3" )
-    	verbose=1;
+        verbose=1;
         partie3;;
     "-all" )
-    	partie1;
-    	partie2;
-    	partie3;;
+        partie1;
+        partie2;
+        partie3;;
+	"-vall" )
+        verbose=1;
+        partie1;
+        partie2;
+        partie3;;
     "-i" )
         interp;;
     * )
@@ -293,7 +298,8 @@ case $option in
         echo "-v1     : tester la partie 1 (verbose)"
         echo "-v2     : tester la partie 2 (verbose)"
         echo "-v3     : tester la partie 3 (verbose)"
-        echo "-all    : tout tester";;
+        echo "-all    : tout tester"
+        echo "-vall   : tout tester (verbose)";;
 
 esac
 echo

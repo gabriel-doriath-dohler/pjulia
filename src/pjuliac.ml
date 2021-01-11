@@ -115,6 +115,9 @@ let () =
 			print_localisation l;
 			Format.eprintf "Type error: %s@.@?" s;
 			exit 1
+		(*
 		| _						->
 			print_string "Unexpected error of the compiler.";
 			exit 2
+			TODO si debug
+		*)
