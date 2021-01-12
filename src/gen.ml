@@ -35,6 +35,12 @@ let printf s =
 	xorq !%rax !%rax ++
 	call "printf"
 
+let print_nothing =
+	(* %rsi = data to print. *)
+	label "print_nothing" ++
+	printf "nothing" ++
+	jmp "print_loop"
+
 let print_int =
 	(* %rsi = data to print. *)
 	label "print_int" ++
@@ -82,6 +88,8 @@ let print =
 	movq (ind ~ofs:8 ~index:r9 ~scale:8 rsp) !%rsi ++
 	incq !%r13 ++
 
+	cmpq (imm t_nothing) !%rdi ++
+	jz "print_nothing" ++
 	cmpq (imm t_int) !%rdi ++
 	jz "print_int" ++
 	cmpq (imm t_str) !%rdi ++
@@ -134,10 +142,11 @@ let gen tast ofile =
 			(fun n _ c -> c ++ generate_code_print n)
 			h_print_size
 			nop ++ *)
-		print ++ print_int ++ print_str ++ print_bool
+		print ++ print_nothing ++ print_int ++ print_str ++ print_bool
 	in
 	let s_print =
-		(label ".Sprint_int" ++ string "%d") ++
+		(label ".Sprint_nothing" ++ string "Nothing") ++
+		(label ".Sprint_int" ++ string "%ld") ++
 		(label ".Sprint_true" ++ string "true") ++
 		(label ".Sprint_false" ++ string "false")
 	in
