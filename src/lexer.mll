@@ -134,7 +134,7 @@ rule token = parse
 	| integer as i '('			{ Tint_lpar (cl lexbuf, int64_of_string i) }
 	| ')' (ident as s)			{ Trpar_ident (cl lexbuf, s) }
 	| integer as i				{ Tint (cl lexbuf, int64_of_string i) }
-	| '"' [^ '"']* eof			{ lexing_error "Unterminated string." }
+	| '"' [^'"']* eof			{ lexing_error "Unterminated string." }
 	| '"'						{ Tstring (cl lexbuf, lex_string lexbuf) }
 	| ident as s				{ Tident (cl lexbuf, s) }
 	| _ as c					{ lexing_error ("Illegal character: " ^ String.make 1 c) }
@@ -147,6 +147,7 @@ and lex_string = parse
 	| "\\\""			{ Buffer.add_string string_buf "\""; lex_string lexbuf }
 	| "\\\\"			{ Buffer.add_string string_buf "\\"; lex_string lexbuf }
 	| character as c	{ Buffer.add_char string_buf c; lex_string lexbuf }
+	| _ as c			{ lexing_error ("Illegal character: " ^ String.make 1 c) }
 
 {
 	(* Add semicolons automatically. *)
