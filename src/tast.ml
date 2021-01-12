@@ -14,7 +14,7 @@ and non_loc_texpr =
 	| TStr of string
 	| TBool of bool
 
-	(* Expressions with parantheses. *)
+	(* Expressions with parentheses. *)
 	| TPar of tblock
 	| TCall of ident * (texpr list) * ((Typ.t list * Typ.t) list)
 

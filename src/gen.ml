@@ -112,7 +112,7 @@ let rec compile_expr te = match te.te_e with
 		pushq (imm t_str) ++ pushq (ilab (sprintf ".string_%d" n))
 	| TBool b	-> pushq (imm t_bool) ++ pushq (imm (if b then 1 else 0))
 
-	(* Expressions with parantheses. *)
+	(* Expressions with parentheses. *)
 	| TCall ((_, name), args, f_list) ->
 		let nb_args = List.length args in
 
@@ -121,7 +121,12 @@ let rec compile_expr te = match te.te_e with
 
 		(* Compile the body of the function. *)
 		(match name with
-			| "print" -> movq (imm nb_args) !%rsi ++ call "print" ++ popn (16 * nb_args)
+			| "print" ->
+				movq (imm nb_args) !%rsi ++
+				call "print" ++
+				popn (16 * nb_args) ++
+				pushq (imm t_nothing) ++
+				push (imm 0)
 			| _ -> popn (16 * nb_args)) (* TODO *)
 	| _ -> pushq (imm 0) ++ pushq (imm 0) (* TODO *)
 
@@ -138,10 +143,6 @@ let gen tast ofile =
 
 	(* Add the print functions. *)
 	let print_functions =
-		(* Hashtbl.fold
-			(fun n _ c -> c ++ generate_code_print n)
-			h_print_size
-			nop ++ *)
 		print ++ print_nothing ++ print_int ++ print_str ++ print_bool
 	in
 	let s_print =

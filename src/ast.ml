@@ -96,7 +96,7 @@ and non_loc_expr =
 	| Str of string
 	| Bool of bool
 
-	(* Expressions with parantheses. *)
+	(* Expressions with parentheses. *)
 	| Par of block
 	| Call of ident * block
 

@@ -120,7 +120,7 @@ let rec type2_expr env e =
 		| Str s		-> TStr s, Typ.Str
 		| Bool b	-> TBool b, Typ.Bool
 
-		(* Expressions with parantheses. *)
+		(* Expressions with parentheses. *)
 		| Par b -> let tb = type2_block env b in TPar tb, tb.block_type
 		| Call ((l, name), args) ->
 			let targs = List.map (type2_expr env) args in
