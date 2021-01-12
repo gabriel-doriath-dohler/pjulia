@@ -12,6 +12,9 @@ let set_file f s = f := s
 let parse_only = ref false
 let type_only = ref false
 
+(* Compilation options to interpret instead of compiling. *)
+let interp = ref false
+
 (* Compilation option to print the parsed ast. *)
 let print = ref false
 
@@ -24,11 +27,12 @@ let nb_rand_test = ref 0
 (* Compilation options. Can be printed with --help.*)
 let usage = "Usage: pjuliac [option] file.jl"
 let options = [
-	("--parse-only", Arg.Set parse_only, "Do just the parsing.");
+	("--parse-only", Arg.Set parse_only, "Do just the parsing");
 	("--type-only", Arg.Set type_only, "Do just the parsing and typing");
-	("-n", Arg.Set_int nb_rand_test, "Number of random tests (default is 0).");
-	("--print", Arg.Set print, "Print the parsed ast.");
-	("--debug", Arg.Set debug, "Print the tokens."); ]
+	("-i", Arg.Set interp, "Do not compile but interpret");
+	("-n", Arg.Set_int nb_rand_test, "Number of random tests (default is 0)");
+	("--print", Arg.Set print, "Print the parsed ast");
+	("--debug", Arg.Set debug, "Print the tokens"); ]
 
 (* Print in stderr the localisation. *)
 let print_localisation l =
@@ -94,9 +98,13 @@ let () =
 
 		if !type_only then exit 0;
 
-		(* Compile. *)
-		let ofile = (Filename.remove_extension !file) ^ ".s" in
-		Gen.gen tast ofile;
+		if not !interp then begin
+			(* Compile. *)
+			let ofile = (Filename.remove_extension !file) ^ ".s" in
+			Gen.gen tast ofile;
+		end else begin
+			Interp.file ast;
+		end
 
 	with
 		| Lexer.Lexing_error s	->
@@ -115,9 +123,10 @@ let () =
 			print_localisation l;
 			Format.eprintf "Type error: %s@.@?" s;
 			exit 1
-		(*
+		| Interp.Interp_error s ->
+			(* TODO localisation *)
+			Format.eprintf "Interpretation error: %s@.@?" s;
+			exit 1
 		| _						->
 			print_string "Unexpected error of the compiler.";
 			exit 2
-			TODO si debug
-		*)

@@ -227,15 +227,15 @@ for f in tests/exec/*.jl; do
     max=`expr $max + 1`;
     rm -f out
     if $compilo $f > out; then
-	if cmp --quiet out $expected; then
-	    score_test=`expr $score_test + 1`;
-	else
-	    echo
-	    echo "ECHEC : mauvaise sortie pour $f"
-	fi
+    if cmp --quiet out $expected; then
+        score_test=`expr $score_test + 1`;
     else
-	echo
-	echo "ECHEC de l'interprétation sur $f"
+        echo
+        echo "ECHEC : mauvaise sortie pour $f"
+    fi
+    else
+    echo
+    echo "ECHEC de l'interprétation sur $f"
     fi
 done
 echo
@@ -247,10 +247,10 @@ for f in tests/exec-fail/*.jl; do
     echo -n "."
     max=`expr $max + 1`;
     if $compilo $f > /dev/null 2>&1; then
-	echo
-	echo "ECHEC : le code $f devrait échouer"
+    echo
+    echo "ECHEC : le code $f devrait échouer"
     else
-	score_test=`expr $score_test + 1`;
+    score_test=`expr $score_test + 1`;
     fi
 done
 
@@ -269,8 +269,8 @@ case $option in
     "-3" )
         partie3;;
     "-v1" )
-	verbose=1;
-	partie1;;
+        verbose=1;
+        partie1;;
     "-v2" )
         verbose=1;
         partie2;;
@@ -286,6 +286,9 @@ case $option in
         partie1;
         partie2;
         partie3;;
+    "-vi" )
+        verbose=1;
+        interp;;
     "-i" )
         interp;;
     * )
@@ -295,6 +298,7 @@ case $option in
         echo "-2      : tester la partie 2"
         echo "-3      : tester la partie 3"
         echo "-i      : tester avec un interprète"
+        echo "-vi      : tester avec un interprète (verbose)"
         echo "-v1     : tester la partie 1 (verbose)"
         echo "-v2     : tester la partie 2 (verbose)"
         echo "-v3     : tester la partie 3 (verbose)"
@@ -302,4 +306,5 @@ case $option in
         echo "-vall   : tout tester (verbose)";;
 
 esac
+echo
 echo

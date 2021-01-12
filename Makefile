@@ -3,6 +3,9 @@ all: pjuliac.exe
 	gcc -no-pie tests/test.s
 	./a.out
 
+interp: pjuliac.exe
+	./pjuliac -i tests/test.jl
+
 pjuliac.exe:
 	dune build src/pjuliac.exe
 	cp _build/default/src/pjuliac.exe pjuliac
@@ -36,11 +39,20 @@ test3: pjuliac.exe
 vtest3: pjuliac.exe
 	./tests/run_tests -v3 "./pjuliac.exe"
 
+testi: pjuliac.exe
+	./tests/run_tests -i "./pjuliac -i"
+
+vtesti: pjuliac.exe
+	./tests/run_tests -vi "./pjuliac -i"
+
 clean:
 	dune clean
 	rm -f /tmp/parser.conflicts
 	rm -f pjuliac
 	rm -f *.s
+	rm -f tests/*.s
+	rm -f tests/exec/*.s
+	rm -f tests/exec-fail/*.s
 	rm -f out
 
 .PHONY: all explain tests vtests test1 vtest1 test2 vtest2 clean
