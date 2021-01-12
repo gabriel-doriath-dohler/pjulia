@@ -27,6 +27,33 @@ let popn n =
 	if n = 0 then nop
 	else addq (imm n) !%rsp
 
+(* Error handeling. *)
+
+(* Associate each error message wich a label in data. *)
+let h_error_number:((string, int) Hashtbl.t) = Hashtbl.create 16
+let nb_total_error = ref 0
+
+let error_number s =
+	try Hashtbl.find h_error_number s
+	with Not_found ->
+		incr nb_total_error;
+		Hashtbl.replace h_error_number s !nb_total_error;
+		!nb_total_error
+
+let code_error =
+	label ".error" ++
+	(* Restore the original value of %rsp and %rbp *)
+	movq !%r14 !%rbp ++
+	movq !%r15 !%rsp ++
+
+	(* Return with code 1. *)
+	movq (imm 1) !%rax ++
+	ret
+
+let error jump error_msg =
+	let n = error_number error_msg in
+	jump (sprintf ".code_error_%d" n)
+
 (* Implementation of print. *)
 let printf s =
 	(* %rsi = data to print. *)
@@ -37,50 +64,50 @@ let printf s =
 
 let print_nothing =
 	(* %rsi = data to print. *)
-	label "print_nothing" ++
+	label ".print_nothing" ++
 	printf "nothing" ++
-	jmp "print_loop"
+	jmp ".print_loop"
 
 let print_int =
 	(* %rsi = data to print. *)
-	label "print_int" ++
+	label ".print_int" ++
 	(* printf requires %rax to be set to zero. *)
 	xorq !%rax !%rax ++
 	printf "int" ++
-	jmp "print_loop"
+	jmp ".print_loop"
 
 let print_str =
 	(* %rsi = data to print. *)
-	label "print_str" ++
+	label ".print_str" ++
 	movq !%rsi !%rdi ++
 	(* printf requires %rax to be set to zero. *)
 	xorq !%rax !%rax ++
 	call "printf" ++
-	jmp "print_loop"
+	jmp ".print_loop"
 
 let print_bool =
 	(* %rsi = data to print. *)
-	label "print_bool" ++
+	label ".print_bool" ++
 	testq !%rsi !%rsi ++
-	jz "print_false" ++
+	jz ".print_false" ++
 	printf "true" ++
-	jmp "print_loop" ++
+	jmp ".print_loop" ++
 
-	label "print_false" ++
+	label ".print_false" ++
 	printf "false" ++
-	jmp "print_loop"
+	jmp ".print_loop"
 
 let print =
 	(* rsi = numbers of arguments to print. *)
 	label "print" ++
 	(* pushq !%rbp ++
-	movq !%rsp !%rbp ++ *)
+	movq !%rsp !%rbp ++ TODO *)
 	movq !%rsi !%r12 ++
 	xorq !%r13 !%r13 ++
 
-	label "print_loop" ++
+	label ".print_loop" ++
 	cmpq !%r12 !%r13 ++
-	jz "print_end" ++
+	jz ".print_end" ++
 	movq !%r13 !%r9 ++ (* TODO leaq *)
 	imulq (imm 2) !%r9 ++ (* TODO leaq *)
 
@@ -89,18 +116,18 @@ let print =
 	incq !%r13 ++
 
 	cmpq (imm t_nothing) !%rdi ++
-	jz "print_nothing" ++
+	jz ".print_nothing" ++
 	cmpq (imm t_int) !%rdi ++
-	jz "print_int" ++
+	jz ".print_int" ++
 	cmpq (imm t_str) !%rdi ++
-	jz "print_str" ++
+	jz ".print_str" ++
 	cmpq (imm t_bool) !%rdi ++
-	jz "print_bool" ++
+	jz ".print_bool" ++
 
 	(* error "Print cannot print this type." ++ *) (* TODO *)
 
-	label "print_end" ++
-	(* leave ++ *)
+	label ".print_end" ++
+	(* leave ++ TODO *)
 	ret
 
 (* Compilation. *)
@@ -126,8 +153,20 @@ let rec compile_expr te = match te.te_e with
 				call "print" ++
 				popn (16 * nb_args) ++
 				pushq (imm t_nothing) ++
-				push (imm 0)
+				pushq (imm 0)
 			| _ -> popn (16 * nb_args)) (* TODO *)
+
+	(* Operations. *)
+	| TNot te	->
+		compile_expr te ++
+		popq rax ++ (* Value. *)
+		popq rbx ++ (* Type. *)
+		cmpq (imm t_bool) !%rbx ++
+		error jnz "Type error: Not takes a bool.\n" ++
+		xorq (imm 1) !%rax ++
+		pushq !%rbx ++
+		pushq !%rax
+
 	| _ -> pushq (imm 0) ++ pushq (imm 0) (* TODO *)
 
 let compile_stmt (code_fun, code) = function
@@ -156,17 +195,46 @@ let gen tast ofile =
 	let strings = Hashtbl.fold
 		(fun s nb c -> c ++ label (sprintf ".string_%d" nb) ++ string s) h_string_number nop in
 
+	(* Add the error messages to the data segment. *)
+	let errors = Hashtbl.fold
+		(fun s nb c -> c ++ label (sprintf ".error_%d" nb) ++ string s) h_error_number nop in
+
+	(* Add the error printing functions. *)
+	let code_errors = Hashtbl.fold
+		(fun s nb c ->
+			c ++
+			label (sprintf ".code_error_%d" nb) ++
+			(* Print the error message. *) (* TODO *)
+			pushq (imm t_str) ++ pushq (ilab (sprintf ".error_%d" nb)) ++
+			movq (imm 1) !%rsi ++
+			call "print" ++ (* TODO alignement. *)
+			(* Terminate the execution with error code 1. *)
+			jmp ".error";)
+		h_error_number nop in
+
 	let global_variables = nop in (* TODO *)
 
 	let p =
 		{ text =
 			globl "main" ++ label "main" ++
+			(* Keep %rbp in %r14 for error handeling. *)
+			movq !%rbp !%r15 ++
+			(* Keep %rsp in %r15 for error handeling. *)
+			movq !%rsp !%r15 ++
+
 			code ++
-			xorq !%rax !%rax ++ (* Exit with code 0. *)
+			(* Restore the original value of %rsp and %rbp *)
+			movq !%r14 !%rbp ++
+			movq !%r15 !%rsp ++
+			(* Exit with code 0. *)
+			xorq !%rax !%rax ++
 			ret ++
+
+			codefun ++
 			print_functions ++
-			codefun;
-		data = strings ++ global_variables ++ s_print; }
+			code_errors ++
+			code_error;
+		data = strings ++ errors ++ global_variables ++ s_print; }
 	in
 
 	(* Write the program. *)
