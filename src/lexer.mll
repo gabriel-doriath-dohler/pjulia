@@ -3,6 +3,8 @@
 	open Parser
 	open Format
 
+	let string_buf = Buffer.create 2048
+
 	exception Lexing_error of string
 	let lexing_error s = raise (Lexing_error s)
 
@@ -78,13 +80,12 @@ let digit = ['0'-'9']
 let alpha = ['a'-'z' 'A'-'Z' '_']
 let ident = alpha (alpha | digit)*
 let integer = digit +
-let character = ([' '-'~']#['\\' '"']) | "\\\\" | "\\\"" | "\\n" |"\\t"
+let character = [' '-'~']#['\\' '"']
 
 let comment = "#" [^'\n']*
 let space = ' ' | '\t'
 
 rule token = parse
-	| eof						{ Teof }
 	| space +
 	| comment					{ token lexbuf }
 	| '\n'						{ new_line lexbuf;
@@ -133,10 +134,19 @@ rule token = parse
 	| integer as i '('			{ Tint_lpar (cl lexbuf, int64_of_string i) }
 	| ')' (ident as s)			{ Trpar_ident (cl lexbuf, s) }
 	| integer as i				{ Tint (cl lexbuf, int64_of_string i) }
-	| '"' (character* as s) '"'	{ Tstring (cl lexbuf, s) }
+	| '"' [^ '"']* eof			{ lexing_error "Unterminated string." }
+	| '"'						{ Tstring (cl lexbuf, lex_string lexbuf) }
 	| ident as s				{ Tident (cl lexbuf, s) }
 	| _ as c					{ lexing_error ("Illegal character: " ^ String.make 1 c) }
+	| eof						{ Teof }
 
+and lex_string = parse
+	| '"'				{ let s = Buffer.contents string_buf in Buffer.reset string_buf; s }
+	| "\\n"				{ Buffer.add_string string_buf "\n"; lex_string lexbuf }
+	| "\\t"				{ Buffer.add_string string_buf "\t"; lex_string lexbuf }
+	| "\\\""			{ Buffer.add_string string_buf "\""; lex_string lexbuf }
+	| "\\\\"			{ Buffer.add_string string_buf "\\"; lex_string lexbuf }
+	| character as c	{ Buffer.add_char string_buf c; lex_string lexbuf }
 
 {
 	(* Add semicolons automatically. *)
