@@ -88,7 +88,7 @@ let print_bool =
 	jmp ".print_loop"
 
 let print =
-	(* TODO alignement *)
+	(* TODO Align. *)
 	(* rsi = numbers of arguments to print. *)
 	label "print" ++
 	pushq !%rbp ++
@@ -152,11 +152,76 @@ let rec compile_expr te = match te.te_e with
 		compile_expr te ++
 		popq rax ++ (* Value. *)
 		popq rbx ++ (* Type. *)
+
+		(* Type check. *)
 		cmpq (imm t_bool) !%rbx ++
 		error jnz "Type error: Not takes a bool." ++
+
 		xorq (imm 1) !%rax ++
 		pushq !%rbx ++
 		pushq !%rax
+	| TBinop (te1, op, te2) ->
+		compile_expr te1 ++
+		compile_expr te2 ++
+
+		popq rcx ++ (* Value 2. *)
+		popq rdx ++ (* Type 2. *)
+
+		popq rax ++ (* Value 1. *)
+		popq rbx ++ (* Type 1. *)
+
+		(* Type check. *)
+		(match op with
+			| Add | Sub | Mul | Mod | Pow ->
+				cmpq (imm t_int) !%rbx ++
+				error jnz "Type error: Arithmetic operations take an int as a first argument." ++
+				cmpq (imm t_int) !%rdx ++
+				error jnz "Type error: Arithmetic operations take an int as a second argument."
+			| And | Or ->
+				cmpq (imm t_bool) !%rbx ++
+				error jnz "Type error: Boolean operations take a bool as a first argument." ++
+				cmpq (imm t_bool) !%rdx ++
+				error jnz "Type error: Boolean operations take a bool as a second argument."
+			| Eq | Neq -> nop
+			| L | Leq | G | Geq ->
+				cmpq (imm t_bool) !%rbx ++
+				jz ".cmp_arg1_type_ok" ++
+				cmpq (imm t_int) !%rbx ++
+				error jnz "Type error: Comparisons take a bool or an int as a first argument." ++
+
+				label ".cmp_arg1_type_ok" ++
+				cmpq (imm t_bool) !%rdx ++
+				jz ".cmp_arg2_type_ok" ++
+				cmpq (imm t_int) !%rdx ++
+				error jnz "Type error: Comparisons take a bool or an int as a second argument." ++
+				label ".cmp_arg2_type_ok") ++
+
+		(* Compile the operation. *)
+		(match op with
+			| Add	-> addq !%rcx !%rax
+			| Sub	-> subq !%rcx !%rax
+			| Mul	-> imulq !%rcx !%rax
+			| Mod	-> assert false
+				(* testq !%rcx !%rcx ++
+				error jz "Division by zero." ++
+				idivq *)
+			| Pow	-> assert false
+			| And	-> assert false
+			| Or	-> assert false
+			| Eq	-> assert false
+			| Neq	-> assert false
+			| L		-> assert false
+			| Leq	-> assert false
+			| G		-> assert false
+			| Geq	-> assert false) ++ (* TODO *)
+
+		(* Push the result. *)
+		(match op with
+			| Add | Sub | Mul -> pushq !%rbx ++ pushq !%rax
+			| Mod -> assert false
+			| Pow -> assert false
+			| And | Or -> assert false
+			| Eq | Neq | L | Leq | G | Geq -> assert false) (* TODO *)
 
 	| _ -> pushq (imm 0) ++ pushq (imm 0) (* TODO *)
 
