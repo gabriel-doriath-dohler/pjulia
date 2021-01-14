@@ -41,7 +41,7 @@ let error_number s =
 		!nb_total_error
 
 let error jump error_msg =
-	let n = error_number (sprintf "@.%s@." error_msg) in
+	let n = error_number (sprintf "@.Error: %s@." error_msg) in
 	jump (sprintf ".code_error_%d" n)
 
 (* Implementation of print. *)
@@ -115,11 +115,52 @@ let print =
 	cmpq (imm t_bool) !%rdi ++
 	jz ".print_bool" ++
 
-	error jmp "Error: print cannot print this type." ++
+	error jmp "Print cannot print this type." ++
 
 	label ".print_end" ++
 	leave ++
 	ret
+
+(* stdlib *)
+let pow =
+	(* rdx <- rax^rcx
+	rcx = power counter
+	rsi = tmp for tests on the power counter
+	rbx = res1
+	rdx = res2
+	res = res1 * res2 (in rdx) *)
+	label ".pow" ++
+	movq (imm 1) !%rbx ++
+	movq (imm 1) !%rdx ++
+
+	cmpq (imm 0) !%rcx ++
+	error js "Negative power." ++
+
+	label ".pow_loop" ++
+	testq !%rcx !%rcx ++
+	jz ".pow_end" ++
+	cmpq (imm 1) !%rcx ++
+	jz ".pow_1" ++
+
+	movq !%rcx !%rsi ++
+	andq (imm 1) !%rsi ++
+	jz ".pow_even" ++
+	imulq !%rax !%rdx ++
+	label ".pow_even" ++
+	imulq !%rax !%rax ++
+	imulq !%rbx !%rbx ++
+	shrq (imm 1) !%rcx ++
+
+	jmp ".pow_loop" ++
+
+	label ".pow_1" ++
+	imulq !%rax !%rdx ++
+	label ".pow_end" ++
+	imulq !%rbx !%rdx ++
+	ret
+
+let stdlib =
+	pow
 
 (* Compilation. *)
 let rec compile_expr te = match te.te_e with
@@ -213,11 +254,12 @@ let rec compile_expr te = match te.te_e with
 			| Add	-> addq v2 v1
 			| Sub	-> subq v2 v1
 			| Mul	-> imulq v2 v1
-			| Mod	-> assert false
-				(* testq v2 v2 ++
+			| Mod	->
+				testq v2 v2 ++
 				error jz "Division by zero." ++
-				idivq *)
-			| Pow	-> assert false
+				cqto ++
+				idivq v2
+			| Pow	-> call ".pow"
 			| And	-> andq v2 v1
 			| Or	-> orq v2 v1
 			| Eq	-> assert false
@@ -230,8 +272,7 @@ let rec compile_expr te = match te.te_e with
 		(* Push the result. *)
 		(match op with
 			| Add | Sub | Mul | Or | And -> pushq t1 ++ pushq v1
-			| Mod -> assert false
-			| Pow -> assert false
+			| Mod | Pow -> pushq (imm t_int) ++ pushq !%rdx
 			| Eq | Neq | L | Leq | G | Geq -> assert false) (* TODO *)
 
 	| _ -> pushq (imm 0) ++ pushq (imm 0) (* TODO *)
@@ -311,6 +352,7 @@ let gen tast ofile =
 
 			codefun ++
 			print_functions ++
+			stdlib ++
 			code_errors;
 		data = strings ++ errors ++ global_variables ++ s_print; }
 	in
