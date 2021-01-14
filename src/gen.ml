@@ -51,7 +51,7 @@ let code_error =
 	ret
 
 let error jump error_msg =
-	let n = error_number error_msg in
+	let n = error_number (sprintf "@.%s@." error_msg) in
 	jump (sprintf ".code_error_%d" n)
 
 (* Implementation of print. *)
@@ -100,8 +100,8 @@ let print_bool =
 let print =
 	(* rsi = numbers of arguments to print. *)
 	label "print" ++
-	(* pushq !%rbp ++
-	movq !%rsp !%rbp ++ TODO *)
+	pushq !%rbp ++
+	movq !%rsp !%rbp ++
 	movq !%rsi !%r12 ++
 	xorq !%r13 !%r13 ++
 
@@ -111,8 +111,8 @@ let print =
 	movq !%r13 !%r9 ++ (* TODO leaq *)
 	imulq (imm 2) !%r9 ++ (* TODO leaq *)
 
-	movq (ind ~ofs:16 ~index:r9 ~scale:8 rsp) !%rdi ++
-	movq (ind ~ofs:8 ~index:r9 ~scale:8 rsp) !%rsi ++
+	movq (ind ~ofs:24 ~index:r9 ~scale:8 rsp) !%rdi ++
+	movq (ind ~ofs:16 ~index:r9 ~scale:8 rsp) !%rsi ++
 	incq !%r13 ++
 
 	cmpq (imm t_nothing) !%rdi ++
@@ -124,10 +124,10 @@ let print =
 	cmpq (imm t_bool) !%rdi ++
 	jz ".print_bool" ++
 
-	(* error "Print cannot print this type." ++ *) (* TODO *)
+	error jmp "Error: print cannot print this type." ++
 
 	label ".print_end" ++
-	(* leave ++ TODO *)
+	leave ++
 	ret
 
 (* Compilation. *)
@@ -162,7 +162,7 @@ let rec compile_expr te = match te.te_e with
 		popq rax ++ (* Value. *)
 		popq rbx ++ (* Type. *)
 		cmpq (imm t_bool) !%rbx ++
-		error jnz "Type error: Not takes a bool.\n" ++
+		error jnz "Type error: Not takes a bool." ++
 		xorq (imm 1) !%rax ++
 		pushq !%rbx ++
 		pushq !%rax
@@ -207,7 +207,7 @@ let gen tast ofile =
 			(* Print the error message. *) (* TODO *)
 			pushq (imm t_str) ++ pushq (ilab (sprintf ".error_%d" nb)) ++
 			movq (imm 1) !%rsi ++
-			call "print" ++ (* TODO alignement. *)
+			call "print" ++ (* TODO alignement, print_str, stderr. *)
 			(* Terminate the execution with error code 1. *)
 			jmp ".error";)
 		h_error_number nop in
