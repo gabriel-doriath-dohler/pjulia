@@ -44,6 +44,7 @@
 %token Teof
 
 /* Definition of the priorities and associativities of tokens. */
+%nonassoc cond
 %nonassoc Treturn
 %nonassoc Tfor Twhile Tint Tstring Ttrue Tfalse Tlpar Tident_lpar Tident Tint_lpar Tint_ident Tif
 %right Teq
@@ -109,8 +110,7 @@ param_list:
 	| p=param Tsemicolon bl=param_list	{ p :: bl }
 	| Tsemicolon bl=param_list			{ bl }
 
-(* Expressions wich don't start with a unitary minus. *)
-expr_without_uminus:
+expr:
 	(* Constants. *)
 	| n=Tint	{ fst n, Int (snd n) }
 	| s=Tstring	{ fst s, Str (snd s) }
@@ -139,40 +139,45 @@ expr_without_uminus:
 		else
 			fst name, Call (name, inputs) }
 	(* Operations. *)
-	| l=Tnot e=expr											{ l, Not e }
-	| e1=expr_without_uminus o=op e2=expr					{ fst e1, Binop (e1, o, e2) }
+	| l=Tnot e=expr							{ l, Not e }
+	| e1=expr o=op e2=expr					{ fst e1, Binop (e1, o, e2) }
+	| Tsub e=expr %prec uminus				{ fst e, Binop((fst e, Int 0L), Sub, e) }
 	(* Lvalues. *)
-	| l=lvalue												{ fst l, Lval l }
-	| l=lvalue Teq e=expr									{ fst l, Affect (l, e) }
+	| l=lvalue								{ fst l, Lval l }
+	| l=lvalue Teq e=expr					{ fst l, Affect (l, e) }
 	(* Return. *)
-	| l=Treturn e = expr									{ l, Return (Some e) }
-	| l=Treturn												{ l, Return None }
+	| l=Treturn e = expr					{ l, Return (Some e) }
+	| l=Treturn								{ l, Return None }
 	(* Control structures. *)
-	| l=Tfor idx=Tident Teq e1=expr Tcolon e2=expr b=block_without_uminus Tend
-		{ l, For (idx, e1, e2, b) }
-	| l=Twhile e=expr b=block_without_uminus Tend			{ l, While (e, b) }
-	| l=Tif e=expr b1=block_without_uminus b2=else_block	{ l, If (e, b1, b2) }
+	| fe=for_cond b=block Tend
+		{ match fe with
+			| l, idx, e1, e2 -> l, For (idx, e1, e2, b) }
+	| we=while_cond b=block Tend			{ fst we, While (snd we, b) }
+	| ie=if_cond b1=block b2=else_block		{ fst ie, If (snd ie, b1, b2) }
 
-(* Expression starting with a unitary minus. *)
-expr_with_uminus:
-	(* Match the longest expression possible after while, if, elseif, lvalue and for. *)
-	| l=Tsub e = expr %prec uminus							{ l, Binop ((l, Int 0L), Sub, e) }
-	| e1=expr_with_uminus o=op e2=expr						{ fst e1, Binop (e1, o, e2) }
+(* Match the longest expression possible after while, if, elseif and for. *)
+while_cond:
+	| l=Twhile e=expr %prec cond	{ l, e }
 
-%inline expr:
-	| e=expr_with_uminus	{ e }
-	| e=expr_without_uminus	{ e }
+if_cond:
+	| l=Tif e=expr %prec cond		{ l, e }
+
+else_if_cond:
+	| l=Telseif e=expr %prec cond	{ l, e }
+
+for_cond:
+	| l=Tfor idx=Tident Teq e1=expr Tcolon e2=expr %prec cond { l, idx, e1, e2 }
 
 %inline lvalue:
-	| id=Tident								{ fst id, Var id }
-	| e=expr_without_uminus Tdot id=Tident	{ fst e, Field (e, id) }
+	| id=Tident						{ fst id, Var id }
+	| e=expr Tdot id=Tident			{ fst e, Field (e, id) }
 
 else_block:
 	| Tend									{ [] }
 	| l=Telse b=block Tend					{ b }
 	| z=Telse zz=Tif %prec else_if_error	{ Ast.syntax_error "The token if can't follow else." }
-	| l=Telseif e=expr b1=block_without_uminus b2=else_block
-		{ [l, If (e, b1, b2)] }
+	| elif=else_if_cond b1=block b2=else_block
+		{ [fst elif, If (snd elif, b1, b2)] }
 
 %inline op:
 	(* Tests. *)
@@ -197,13 +202,6 @@ block:
 	| e=expr					{ [e] }
 	| e=expr Tsemicolon b=block	{ e :: b }
 	| Tsemicolon b=block		{ b }
-
-(* Blocks wich don't start with a unitary minus. *)
-block_without_uminus:
-	| 											{ [] }
-	| e=expr_without_uminus						{ [e] }
-	| e=expr_without_uminus Tsemicolon b=block	{ e :: b }
-	| Tsemicolon b=block						{ b }
 
 (* Non empty block. *)
 %inline block1:
