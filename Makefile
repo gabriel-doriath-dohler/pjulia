@@ -31,13 +31,13 @@ test2: pjuliac.exe
 	./tests/run_tests -2 "./pjuliac"
 
 vtest2: pjuliac.exe
-	./tests/run_tests -v2 "./pjuliac.exe"
+	./tests/run_tests -v2 "./pjuliac"
 
 test3: pjuliac.exe
 	./tests/run_tests -3 "./pjuliac"
 
 vtest3: pjuliac.exe
-	./tests/run_tests -v3 "./pjuliac.exe"
+	./tests/run_tests -v3 "./pjuliac"
 
 testi: pjuliac.exe
 	./tests/run_tests -i "./pjuliac -i"
