@@ -90,6 +90,8 @@ let mangle_none fmt (l: label) = fprintf fmt "%s" l
 let mangle_leading_underscore fmt (l: label) = fprintf fmt "_%s" l
 let mangle = mangle_none
 
+let stderr = fun fmt () -> fprintf fmt "stderr"
+
 let reg r = fun fmt () -> fprintf fmt "%s" r
 let (!%) = reg
 let imm i = fun fmt () -> fprintf fmt "$%i" i

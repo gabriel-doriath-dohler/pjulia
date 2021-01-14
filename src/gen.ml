@@ -40,16 +40,6 @@ let error_number s =
 		Hashtbl.replace h_error_number s !nb_total_error;
 		!nb_total_error
 
-let code_error =
-	label ".error" ++
-	(* Restore the original value of %rsp and %rbp *)
-	movq !%r14 !%rbp ++
-	movq !%r15 !%rsp ++
-
-	(* Return with code 1. *)
-	movq (imm 1) !%rax ++
-	ret
-
 let error jump error_msg =
 	let n = error_number (sprintf "@.%s@." error_msg) in
 	jump (sprintf ".code_error_%d" n)
@@ -98,6 +88,7 @@ let print_bool =
 	jmp ".print_loop"
 
 let print =
+	(* TODO alignement *)
 	(* rsi = numbers of arguments to print. *)
 	label "print" ++
 	pushq !%rbp ++
@@ -109,7 +100,7 @@ let print =
 	cmpq !%r12 !%r13 ++
 	jz ".print_end" ++
 	movq !%r13 !%r9 ++ (* TODO leaq *)
-	imulq (imm 2) !%r9 ++ (* TODO leaq *)
+	addq !%r9 !%r9 ++
 
 	movq (ind ~ofs:24 ~index:r9 ~scale:8 rsp) !%rdi ++
 	movq (ind ~ofs:16 ~index:r9 ~scale:8 rsp) !%rsi ++
@@ -204,12 +195,23 @@ let gen tast ofile =
 		(fun s nb c ->
 			c ++
 			label (sprintf ".code_error_%d" nb) ++
-			(* Print the error message. *) (* TODO *)
-			pushq (imm t_str) ++ pushq (ilab (sprintf ".error_%d" nb)) ++
-			movq (imm 1) !%rsi ++
-			call "print" ++ (* TODO alignement, print_str, stderr. *)
-			(* Terminate the execution with error code 1. *)
-			jmp ".error";)
+
+			(* Restore the original value of %rsp and %rbp *)
+			movq !%r14 !%rbp ++
+			movq !%r15 !%rsp ++
+
+			(* Print the error message. *)
+
+			movq (ilab (sprintf ".error_%d" nb)) !%rsi ++
+			(* eprintf requires %rax to be set to zero. *)
+			xorq !%rax !%rax ++
+			(* Print on stderr. *)
+			movq X86_64.stderr !%rdi ++
+			call "fprintf" ++
+
+			(* Return with code 1. *)
+			movq (imm 1) !%rax ++
+			ret;)
 		h_error_number nop in
 
 	let global_variables = nop in (* TODO *)
@@ -221,6 +223,7 @@ let gen tast ofile =
 			movq !%rbp !%r15 ++
 			(* Keep %rsp in %r15 for error handeling. *)
 			movq !%rsp !%r15 ++
+			movq !%rsp !%rbp ++
 
 			code ++
 			(* Restore the original value of %rsp and %rbp *)
@@ -232,8 +235,7 @@ let gen tast ofile =
 
 			codefun ++
 			print_functions ++
-			code_errors ++
-			code_error;
+			code_errors;
 		data = strings ++ errors ++ global_variables ++ s_print; }
 	in
 

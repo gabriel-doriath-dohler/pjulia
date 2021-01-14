@@ -143,6 +143,8 @@ val imm32: int32 -> [>] operand
 val imm64: int64 -> [>] operand
   (** opérande immédiate $i *)
 
+val stderr: 'size operand
+
 val reg: 'size register -> 'size operand
 val (!%): 'size register -> 'size operand
   (** registre *)
