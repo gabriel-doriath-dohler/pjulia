@@ -131,6 +131,13 @@ let rec compile_expr te = match te.te_e with
 	| TBool b	-> pushq (imm t_bool) ++ pushq (imm (if b then 1 else 0))
 
 	(* Expressions with parentheses. *)
+	| TPar tb ->
+		List.fold_left (fun c e -> c ++ compile_expr e) nop tb.block_b ++
+		popq rax ++
+		popq rbx ++
+		popn (16 * (List.length tb.block_b - 1)) ++
+		pushq !%rbx ++
+		pushq !%rax
 	| TCall ((_, name), args, f_list) ->
 		let nb_args = List.length args in
 
@@ -161,6 +168,11 @@ let rec compile_expr te = match te.te_e with
 		pushq !%rbx ++
 		pushq !%rax
 	| TBinop (te1, op, te2) ->
+		(* TODO lazy and or. *)
+		let v1 = !%rax in
+		let t1 = !%rbx in
+		let v2 = !%rcx in
+		let t2 = !%rdx in
 		compile_expr te1 ++
 		compile_expr te2 ++
 
@@ -173,41 +185,41 @@ let rec compile_expr te = match te.te_e with
 		(* Type check. *)
 		(match op with
 			| Add | Sub | Mul | Mod | Pow ->
-				cmpq (imm t_int) !%rbx ++
+				cmpq (imm t_int) t1 ++
 				error jnz "Type error: Arithmetic operations take an int as a first argument." ++
-				cmpq (imm t_int) !%rdx ++
+				cmpq (imm t_int) t1 ++
 				error jnz "Type error: Arithmetic operations take an int as a second argument."
 			| And | Or ->
-				cmpq (imm t_bool) !%rbx ++
+				cmpq (imm t_bool) t1 ++
 				error jnz "Type error: Boolean operations take a bool as a first argument." ++
-				cmpq (imm t_bool) !%rdx ++
+				cmpq (imm t_bool) t2 ++
 				error jnz "Type error: Boolean operations take a bool as a second argument."
 			| Eq | Neq -> nop
 			| L | Leq | G | Geq ->
-				cmpq (imm t_bool) !%rbx ++
+				cmpq (imm t_bool) t1 ++
 				jz ".cmp_arg1_type_ok" ++
-				cmpq (imm t_int) !%rbx ++
+				cmpq (imm t_int) t1 ++
 				error jnz "Type error: Comparisons take a bool or an int as a first argument." ++
 
 				label ".cmp_arg1_type_ok" ++
-				cmpq (imm t_bool) !%rdx ++
+				cmpq (imm t_bool) t2 ++
 				jz ".cmp_arg2_type_ok" ++
-				cmpq (imm t_int) !%rdx ++
+				cmpq (imm t_int) t2 ++
 				error jnz "Type error: Comparisons take a bool or an int as a second argument." ++
 				label ".cmp_arg2_type_ok") ++
 
 		(* Compile the operation. *)
 		(match op with
-			| Add	-> addq !%rcx !%rax
-			| Sub	-> subq !%rcx !%rax
-			| Mul	-> imulq !%rcx !%rax
+			| Add	-> addq v2 v1
+			| Sub	-> subq v2 v1
+			| Mul	-> imulq v2 v1
 			| Mod	-> assert false
-				(* testq !%rcx !%rcx ++
+				(* testq v2 v2 ++
 				error jz "Division by zero." ++
 				idivq *)
 			| Pow	-> assert false
-			| And	-> assert false
-			| Or	-> assert false
+			| And	-> andq v2 v1
+			| Or	-> orq v2 v1
 			| Eq	-> assert false
 			| Neq	-> assert false
 			| L		-> assert false
@@ -217,10 +229,9 @@ let rec compile_expr te = match te.te_e with
 
 		(* Push the result. *)
 		(match op with
-			| Add | Sub | Mul -> pushq !%rbx ++ pushq !%rax
+			| Add | Sub | Mul | Or | And -> pushq t1 ++ pushq v1
 			| Mod -> assert false
 			| Pow -> assert false
-			| And | Or -> assert false
 			| Eq | Neq | L | Leq | G | Geq -> assert false) (* TODO *)
 
 	| _ -> pushq (imm 0) ++ pushq (imm 0) (* TODO *)
