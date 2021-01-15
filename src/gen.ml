@@ -298,7 +298,14 @@ let rec compile_expr te = match te.te_e with
 				error jnz "Type error: Boolean operations take a bool as a first argument." ++
 				cmpq (imm t_bool) t2 ++
 				error jnz "Type error: Boolean operations take a bool as a second argument."
-			| Eq | Neq -> nop
+			| Eq | Neq ->
+				(* Transform bool to int.
+				Idea from Samuel and Constantin (used with permission). *)
+				movq (imm t_int) !%r8 ++
+				cmpq (imm t_bool) t1 ++
+				cmovzq !%r8 t1 ++
+				cmpq (imm t_bool) t2 ++
+				cmovzq !%r8 t2
 			| L | Leq | G | Geq ->
 				let cmp_arg1_type_ok = distinct_label ".cmp_arg1_type_ok" in
 				let cmp_arg2_type_ok = distinct_label ".cmp_arg2_type_ok" in
@@ -328,15 +335,6 @@ let rec compile_expr te = match te.te_e with
 			| And	-> andq v2 v1
 			| Or	-> orq v2 v1
 			| Eq	->
-				(* Result in r8. *)
-				(* Transform bool to int.
-				Idea from Samuel and Constantin (used with permission). *)
-				movq (imm t_int) !%r8 ++
-				cmpq (imm t_bool) t1 ++
-				cmovzq !%r8 t1 ++
-				cmpq (imm t_bool) t2 ++
-				cmovzq !%r8 t2 ++
-				(* Compare the types and the values. *)
 				xorq !%r9 !%r9 ++
 				movq (imm 1) !%r8 ++
 				cmpq t1 t2 ++
@@ -344,15 +342,6 @@ let rec compile_expr te = match te.te_e with
 				cmpq v1 v2 ++
 				cmovnzq !%r9 !%r8
 			| Neq	->
-				(* Result in r8. *)
-				(* Transform bool to int.
-				Idea from Samuel and Constantin (used with permission). *)
-				movq (imm t_int) !%r8 ++
-				cmpq (imm t_bool) t1 ++
-				cmovzq !%r8 t1 ++
-				cmpq (imm t_bool) t2 ++
-				cmovzq !%r8 t2 ++
-				(* Compare the types and the values. *)
 				xorq !%r9 !%r9 ++
 				movq (imm 1) !%r8 ++
 				cmpq t1 t2 ++
@@ -360,17 +349,28 @@ let rec compile_expr te = match te.te_e with
 				cmpq v1 v2 ++
 				cmovnzq !%r9 !%r8 ++
 				xorq (imm 1) !%r8
-			| L		-> assert false
-			| Leq	-> assert false
-			| G		-> assert false
-			| Geq	-> assert false) ++ (* TODO *)
+			| L		->
+				xorq !%r8 !%r8 ++
+				cmpq v2 v1 ++
+				setl !%r8b
+			| Leq	->
+				xorq !%r8 !%r8 ++
+				cmpq v2 v1 ++
+				setle !%r8b
+			| G		->
+				xorq !%r8 !%r8 ++
+				cmpq v2 v1 ++
+				setg !%r8b
+			| Geq	->
+				xorq !%r8 !%r8 ++
+				cmpq v2 v1 ++
+				setge !%r8b) ++
 
 		(* Push the result. *)
 		(match op with
 			| Add | Sub | Mul | Or | And -> pushq t1 ++ pushq v1
 			| Mod | Pow -> pushq (imm t_int) ++ pushq !%rdx
-			| Eq | Neq -> pushq (imm t_bool) ++ pushq !%r8
-			| L | Leq | G | Geq -> assert false) (* TODO *)
+			| Eq | Neq | L | Leq | G | Geq  -> pushq (imm t_bool) ++ pushq !%r8)
 
 	| _ -> pushq (imm 0) ++ pushq (imm 0) (* TODO *)
 
