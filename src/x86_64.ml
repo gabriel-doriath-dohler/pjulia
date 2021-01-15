@@ -145,6 +145,9 @@ let movw a b = ins "movw %a, %a" a () b ()
 let movl a b = ins "movl %a, %a" a () b ()
 let movq a b = ins "movq %a, %a" a () b ()
 
+let cmovzq a b = ins "cmovzq %a, %a" a () b ()
+let cmovnzq a b = ins "cmovnzq %a, %a" a () b ()
+
 let movabsq a b = ins "movabsq %a, %s" a () b
 
 let movsbw a b = ins "movsbw %a, %s" a () b
