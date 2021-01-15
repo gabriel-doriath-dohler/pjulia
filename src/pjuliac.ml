@@ -128,5 +128,5 @@ let () =
 			Format.eprintf "Interpretation error: %s@.@?" s;
 			exit 1
 		| _						->
-			print_string "Unexpected error of the compiler.@.@?";
+			Format.eprintf "Unexpected error of the compiler.@.@?";
 			exit 2
