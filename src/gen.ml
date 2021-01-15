@@ -2,19 +2,9 @@ open Tast
 open X86_64
 open Format
 
-(* Set of all the different sizes on wich we might call print. *)
-let h_print_size:((int, unit) Hashtbl.t) = Hashtbl.create 16
-
-(* Associate each string wich a label in data. *)
-let h_string_number:((string, int) Hashtbl.t) = Hashtbl.create 16
-let nb_total_string = ref 0
-
-let string_number s =
-	try Hashtbl.find h_string_number s
-	with Not_found ->
-		incr nb_total_string;
-		Hashtbl.replace h_string_number s !nb_total_string;
-		!nb_total_string
+let popn n =
+	if n = 0 then nop
+	else addq (imm n) !%rsp
 
 (* Code for the type of an object. *)
 let t_undef = -1
@@ -23,26 +13,68 @@ let t_int = 1
 let t_str = 2
 let t_bool = 3
 
-let popn n =
-	if n = 0 then nop
-	else addq (imm n) !%rsp
+(* Add a number to the label so that it is unique. *)
+let distinct_label =
+	let h_label_number:((string, int) Hashtbl.t) = Hashtbl.create 16 in
+	(fun s ->
+		let n = try 1 + Hashtbl.find h_label_number s with Not_found -> 1 in
+		let name = sprintf "%s_%d" s n in
+		Hashtbl.replace h_label_number s n;
+		name)
+
+(* Associate each string with a label in data. *)
+let h_string_number:((string, int) Hashtbl.t) = Hashtbl.create 16
+
+let string_number =
+	let nb_total_string = ref 0 in
+	(fun s ->
+		try Hashtbl.find h_string_number s
+		with Not_found ->
+			incr nb_total_string;
+			Hashtbl.replace h_string_number s !nb_total_string;
+			!nb_total_string)
+
+let distinct_string s =
+	sprintf ".string_%d" (string_number s)
 
 (* Error handeling. *)
 
 (* Associate each error message wich a label in data. *)
 let h_error_number:((string, int) Hashtbl.t) = Hashtbl.create 16
-let nb_total_error = ref 0
 
-let error_number s =
-	try Hashtbl.find h_error_number s
-	with Not_found ->
-		incr nb_total_error;
-		Hashtbl.replace h_error_number s !nb_total_error;
-		!nb_total_error
+let error_number =
+	let nb_total_error = ref 0 in
+	(fun s ->
+		try Hashtbl.find h_error_number s
+		with Not_found ->
+			incr nb_total_error;
+			Hashtbl.replace h_error_number s !nb_total_error;
+			!nb_total_error)
 
 let error jump error_msg =
 	let n = error_number (sprintf "@.Error: %s@." error_msg) in
 	jump (sprintf ".code_error_%d" n)
+
+let code_error_n n =
+	(* Add the error printing function for error n. *)
+	label (sprintf ".code_error_%d" n) ++
+
+	(* Restore the original value of %rsp and %rbp *)
+	movq !%r14 !%rbp ++
+	movq !%r15 !%rsp ++
+
+	(* Print the error message. *)
+
+	movq (ilab (sprintf ".error_%d" n)) !%rsi ++
+	(* fprintf requires %rax to be set to zero. *)
+	xorq !%rax !%rax ++
+	(* Print on stderr. *)
+	movq X86_64.stderr !%rdi ++
+	call "fprintf" ++
+
+	(* Return with code 1. *)
+	movq (imm 1) !%rax ++
+	ret
 
 (* Implementation of print. *)
 let printf s =
@@ -61,8 +93,6 @@ let print_nothing =
 let print_int =
 	(* %rsi = data to print. *)
 	label ".print_int" ++
-	(* printf requires %rax to be set to zero. *)
-	xorq !%rax !%rax ++
 	printf "int" ++
 	jmp ".print_loop"
 
@@ -90,7 +120,7 @@ let print_bool =
 let print =
 	(* TODO Align. *)
 	(* rsi = numbers of arguments to print. *)
-	label "print" ++
+	label ".print" ++
 	pushq !%rbp ++
 	movq !%rsp !%rbp ++
 	movq !%rsi !%r12 ++
@@ -99,7 +129,7 @@ let print =
 	label ".print_loop" ++
 	cmpq !%r12 !%r13 ++
 	jz ".print_end" ++
-	movq !%r13 !%r9 ++ (* TODO leaq *)
+	movq !%r13 !%r9 ++
 	addq !%r9 !%r9 ++
 
 	movq (ind ~ofs:24 ~index:r9 ~scale:8 rsp) !%rdi ++
@@ -159,20 +189,26 @@ let pow =
 	imulq !%rbx !%rdx ++
 	ret
 
-let stdlib =
+let code_stdlib =
+	print ++ print_nothing ++ print_int ++ print_str ++ print_bool ++
 	pow
+
+let data_stdlib =
+	(* Data for the print functions. *)
+	(label ".Sprint_nothing" ++ string "Nothing") ++
+	(label ".Sprint_int" ++ string "%ld") ++
+	(label ".Sprint_true" ++ string "true") ++
+	(label ".Sprint_false" ++ string "false")
 
 (* Compilation. *)
 let rec compile_expr te = match te.te_e with
 	(* Constants. *)
 	| TInt n	-> pushq (imm t_int) ++ pushq (imm64 n)
-	| TStr s	->
-		let n = string_number s in
-		pushq (imm t_str) ++ pushq (ilab (sprintf ".string_%d" n))
+	| TStr s	-> pushq (imm t_str) ++ pushq (ilab (distinct_string s))
 	| TBool b	-> pushq (imm t_bool) ++ pushq (imm (if b then 1 else 0))
 
 	(* Expressions with parentheses. *)
-	| TPar tb ->
+	| TPar tb -> (* TODO *)
 		List.fold_left (fun c e -> c ++ compile_expr e) nop tb.block_b ++
 		popq rax ++
 		popq rbx ++
@@ -189,7 +225,7 @@ let rec compile_expr te = match te.te_e with
 		(match name with
 			| "print" ->
 				movq (imm nb_args) !%rsi ++
-				call "print" ++
+				call ".print" ++
 				popn (16 * nb_args) ++
 				pushq (imm t_nothing) ++
 				pushq (imm 0)
@@ -208,6 +244,33 @@ let rec compile_expr te = match te.te_e with
 		xorq (imm 1) !%rax ++
 		pushq !%rbx ++
 		pushq !%rax
+	(*
+	| TBinop (te1, op, te2) when op = Add || op = Or -> (* TODO *)
+		(* Lazy evalutation. *)
+		let v1 = !%rax in
+		let t1 = !%rbx in
+		let v2 = !%rcx in
+		let t2 = !%rdx in
+
+		compile_expr te1 ++
+		popq rax ++ (* Value 1. *)
+		popq rbx ++ (* Type 1. *)
+		(* Type check te1. *)
+		cmpq (imm t_bool) t1 ++
+		error jnz "Type error: Boolean operations take a bool as a first argument." ++
+		pushq t1 ++
+		pushq v1 ++
+
+		testq v1 v1 ++
+		jnz
+
+		compile_expr te2 ++
+		popq rcx ++ (* Value 2. *)
+		popq rdx ++ (* Type 2. *)
+		(* Type check te2. *)
+		cmpq (imm t_bool) t2 ++
+		error jnz "Type error: Boolean operations take a bool as a second argument."
+	*)
 	| TBinop (te1, op, te2) ->
 		(* TODO lazy and or. *)
 		let v1 = !%rax in
@@ -237,17 +300,19 @@ let rec compile_expr te = match te.te_e with
 				error jnz "Type error: Boolean operations take a bool as a second argument."
 			| Eq | Neq -> nop
 			| L | Leq | G | Geq ->
+				let cmp_arg1_type_ok = distinct_label ".cmp_arg1_type_ok" in
+				let cmp_arg2_type_ok = distinct_label ".cmp_arg2_type_ok" in
 				cmpq (imm t_bool) t1 ++
-				jz ".cmp_arg1_type_ok" ++
+				jz cmp_arg1_type_ok ++
 				cmpq (imm t_int) t1 ++
 				error jnz "Type error: Comparisons take a bool or an int as a first argument." ++
 
-				label ".cmp_arg1_type_ok" ++
+				label cmp_arg1_type_ok ++
 				cmpq (imm t_bool) t2 ++
-				jz ".cmp_arg2_type_ok" ++
+				jz cmp_arg2_type_ok ++
 				cmpq (imm t_int) t2 ++
 				error jnz "Type error: Comparisons take a bool or an int as a second argument." ++
-				label ".cmp_arg2_type_ok") ++
+				label cmp_arg2_type_ok) ++
 
 		(* Compile the operation. *)
 		(match op with
@@ -262,8 +327,64 @@ let rec compile_expr te = match te.te_e with
 			| Pow	-> call ".pow"
 			| And	-> andq v2 v1
 			| Or	-> orq v2 v1
-			| Eq	-> assert false
+			| Eq	->
+				(* Result in rdi. *)
+				let eq_type_1_ok = distinct_label ".eq_type_1_ok" in
+				let eq_type_2_ok = distinct_label ".eq_type_2_ok" in
+				let eq_false = distinct_label ".eq_false" in
+				let eq_end = distinct_label ".eq_end" in
+				(* Compare the types. *)
+				cmpq t1 t2 ++
+				jz eq_type_2_ok ++
+
+				(* Check type 1. *)
+				cmpq (imm t_bool) t1 ++
+				jz eq_type_1_ok ++
+				cmpq (imm t_int) t1 ++
+				jnz eq_false ++
+
+				label eq_type_1_ok ++
+				(* Check type 2. *)
+				cmpq (imm t_bool) t2 ++
+				jz eq_type_2_ok ++
+				cmpq (imm t_int) t2 ++
+				jnz eq_false ++
+
+				label eq_type_2_ok ++
+				(* Compare the values. *)
+				movq (imm 1) !%rdi ++
+				cmpq v1 v2 ++
+				jz eq_end ++
+
+				label eq_false ++
+				xorq !%rdi !%rdi ++
+				label eq_end
 			| Neq	-> assert false
+				(* Result in rdi.
+				rdi = v1 != v2
+				rsi = t1 != t2
+				r8 = t1 == bool || t1 == int
+				r9 = t2 == bool || t2 == int
+				res = rdi || ((rdi || rsi) && ) TODO *) (*
+				xorq !%rdi !%rdi ++
+				cmpq v1 v2 ++
+				cmovnzq (imm 1) !%rdi ++
+
+				xorq !%rsi !%rsi ++
+				cmpq t1 t2 ++
+				cmovnzq (imm 1) !%rsi ++
+
+				xorq !%r8 !%r8 ++
+				cmpq (imm t_bool) t1 ++
+				cmovzq (imm 1) !%r8 ++
+				cmpq (imm t_int) t1 ++
+				cmovzq (imm 1) !%r8 ++
+
+				xorq !%r9 !%r9 ++
+				cmpq (imm t_bool) t2 ++
+				cmovzq (imm 1) !%r9 ++
+				cmpq (imm t_int) t2 ++
+				cmovzq (imm 1) !%r9 ++ *)
 			| L		-> assert false
 			| Leq	-> assert false
 			| G		-> assert false
@@ -273,65 +394,36 @@ let rec compile_expr te = match te.te_e with
 		(match op with
 			| Add | Sub | Mul | Or | And -> pushq t1 ++ pushq v1
 			| Mod | Pow -> pushq (imm t_int) ++ pushq !%rdx
-			| Eq | Neq | L | Leq | G | Geq -> assert false) (* TODO *)
+			| Eq -> pushq (imm t_bool) ++ pushq !%rdi
+			| Neq | L | Leq | G | Geq -> assert false) (* TODO *)
 
 	| _ -> pushq (imm 0) ++ pushq (imm 0) (* TODO *)
 
-let compile_stmt (code_fun, code) = function
-	| TExpr texpr -> code_fun, code ++ compile_expr texpr
-	| TFunc tfunc -> code_fun, code (* TODO *)
+let compile_stmt (code_func, code) = function
+	| TExpr texpr -> code_func, code ++ compile_expr texpr
+	| TFunc tfunc -> code_func, code (* TODO *)
 
 let gen tast ofile =
 	(* Allocation. *)
 	(* let p = alloc tast in *) (* TODO *)
 
 	(* Code generation. *)
-	let codefun, code = List.fold_left compile_stmt (nop, nop) tast in
-
-	(* Add the print functions. *)
-	let print_functions =
-		print ++ print_nothing ++ print_int ++ print_str ++ print_bool
-	in
-	let s_print =
-		(label ".Sprint_nothing" ++ string "Nothing") ++
-		(label ".Sprint_int" ++ string "%ld") ++
-		(label ".Sprint_true" ++ string "true") ++
-		(label ".Sprint_false" ++ string "false")
-	in
+	let code_func, code = List.fold_left compile_stmt (nop, nop) tast in
 
 	(* Add the strings to the data segment. *)
-	let strings = Hashtbl.fold
-		(fun s nb c -> c ++ label (sprintf ".string_%d" nb) ++ string s) h_string_number nop in
+	let data_string = Hashtbl.fold
+		(fun s nb c -> c ++ label (sprintf ".string_%d" nb) ++ string s)
+		h_string_number nop in
 
 	(* Add the error messages to the data segment. *)
-	let errors = Hashtbl.fold
-		(fun s nb c -> c ++ label (sprintf ".error_%d" nb) ++ string s) h_error_number nop in
-
-	(* Add the error printing functions. *)
-	let code_errors = Hashtbl.fold
-		(fun s nb c ->
-			c ++
-			label (sprintf ".code_error_%d" nb) ++
-
-			(* Restore the original value of %rsp and %rbp *)
-			movq !%r14 !%rbp ++
-			movq !%r15 !%rsp ++
-
-			(* Print the error message. *)
-
-			movq (ilab (sprintf ".error_%d" nb)) !%rsi ++
-			(* eprintf requires %rax to be set to zero. *)
-			xorq !%rax !%rax ++
-			(* Print on stderr. *)
-			movq X86_64.stderr !%rdi ++
-			call "fprintf" ++
-
-			(* Return with code 1. *)
-			movq (imm 1) !%rax ++
-			ret;)
+	let data_error = Hashtbl.fold
+		(fun s nb c -> c ++ label (sprintf ".error_%d" nb) ++ string s)
 		h_error_number nop in
 
-	let global_variables = nop in (* TODO *)
+	(* Add the error printing functions. *)
+	let code_error = Hashtbl.fold
+		(fun _ n c -> c ++ code_error_n n)
+		h_error_number nop in
 
 	let p =
 		{ text =
@@ -342,7 +434,10 @@ let gen tast ofile =
 			movq !%rsp !%r15 ++
 			movq !%rsp !%rbp ++
 
+			comment "Code of the program." ++
 			code ++
+
+			comment "Exit 0." ++
 			(* Restore the original value of %rsp and %rbp *)
 			movq !%r14 !%rbp ++
 			movq !%r15 !%rsp ++
@@ -350,11 +445,19 @@ let gen tast ofile =
 			xorq !%rax !%rax ++
 			ret ++
 
-			codefun ++
-			print_functions ++
-			stdlib ++
-			code_errors;
-		data = strings ++ errors ++ global_variables ++ s_print; }
+			comment "Code of functions." ++
+			code_func ++
+			comment "Stdlib code." ++
+			code_stdlib ++
+			comment "Code for error handeling." ++
+			code_error;
+		data =
+			comment "Data for strings." ++
+			data_string ++
+			comment "Data for stdlib." ++
+			data_stdlib ++
+			comment "Data for error handeling." ++
+			data_error; }
 	in
 
 	(* Write the program. *)
