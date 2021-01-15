@@ -46,3 +46,37 @@
 - `type.mli`: Typing interface.
 - `x86_64.ml`: Slightly modified version of JCF's module to write x86-64
 assembly from OCaml.
+## Added tests
+### tests/
+- `test.jl`
+### tests/syntax/bad/
+- `testfile-unclosed_string-2.jl`
+- `testfile-illegal-char-2.jl`
+### tests/typing/bad/
+- `testfile-not-int.jl`
+- `testfile-println-2.jl`
+- `testfile-print-2.jl`
+- `testfile-div-2.jl`
+- `testfile-affect-1.jl`
+- `testfile-affect-2.jl`
+- `testfile-affect-3.jl`
+- `testfile-affect-4.jl`
+- `testfile-affect-5.jl`
+- `testfile-return-2.jl`
+- `testfile-for-1.jl`
+- `testfile-for-2.jl`
+- `testfile-for-3.jl`
+- `testfile-for-4.jl`
+- `testfile-for-5.jl`
+- `testfile-while-1.jl`
+- `testfile-while-2.jl`
+- `testfile-while-3.jl`
+- `testfile-while-4.jl`
+### tests/exec/
+- `print_return.jl`
+- `while2.jl`
+- `while3.jl`
+- `for6.jl`
+- `for7.jl`
+- `print.jl`
+- `z.jl`
