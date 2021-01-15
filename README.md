@@ -56,6 +56,7 @@ assembly from OCaml.
 - `testfile-not-int.jl`
 - `testfile-println-2.jl`
 - `testfile-print-2.jl`
+- `testfile-param-type.jl`
 - `testfile-div-2.jl`
 - `testfile-affect-1.jl`
 - `testfile-affect-2.jl`
@@ -72,8 +73,13 @@ assembly from OCaml.
 - `testfile-while-2.jl`
 - `testfile-while-3.jl`
 - `testfile-while-4.jl`
+- `issou.jl`
 ### tests/exec/
+- `fib_rec.jl`
+- `jpp.jl`
 - `print_return.jl`
+- `struct2.jl`
+- `syracuse.jl`
 - `while2.jl`
 - `while3.jl`
 - `for6.jl`
