@@ -328,63 +328,38 @@ let rec compile_expr te = match te.te_e with
 			| And	-> andq v2 v1
 			| Or	-> orq v2 v1
 			| Eq	->
-				(* Result in rdi. *)
-				let eq_type_1_ok = distinct_label ".eq_type_1_ok" in
-				let eq_type_2_ok = distinct_label ".eq_type_2_ok" in
-				let eq_false = distinct_label ".eq_false" in
-				let eq_end = distinct_label ".eq_end" in
-				(* Compare the types. *)
-				cmpq t1 t2 ++
-				jz eq_type_2_ok ++
-
-				(* Check type 1. *)
+				(* Result in r8. *)
+				(* Transform bool to int.
+				Idea from Samuel and Constantin (used with permission). *)
+				movq (imm t_int) !%r8 ++
 				cmpq (imm t_bool) t1 ++
-				jz eq_type_1_ok ++
-				cmpq (imm t_int) t1 ++
-				jnz eq_false ++
-
-				label eq_type_1_ok ++
-				(* Check type 2. *)
+				cmovzq !%r8 t1 ++
 				cmpq (imm t_bool) t2 ++
-				jz eq_type_2_ok ++
-				cmpq (imm t_int) t2 ++
-				jnz eq_false ++
-
-				label eq_type_2_ok ++
-				(* Compare the values. *)
-				movq (imm 1) !%rdi ++
-				cmpq v1 v2 ++
-				jz eq_end ++
-
-				label eq_false ++
-				xorq !%rdi !%rdi ++
-				label eq_end
-			| Neq	-> assert false
-				(* Result in rdi.
-				rdi = v1 != v2
-				rsi = t1 != t2
-				r8 = t1 == bool || t1 == int
-				r9 = t2 == bool || t2 == int
-				res = rdi || ((rdi || rsi) && ) TODO *) (*
-				xorq !%rdi !%rdi ++
-				cmpq v1 v2 ++
-				cmovnzq (imm 1) !%rdi ++
-
-				xorq !%rsi !%rsi ++
-				cmpq t1 t2 ++
-				cmovnzq (imm 1) !%rsi ++
-
-				xorq !%r8 !%r8 ++
-				cmpq (imm t_bool) t1 ++
-				cmovzq (imm 1) !%r8 ++
-				cmpq (imm t_int) t1 ++
-				cmovzq (imm 1) !%r8 ++
-
+				cmovzq !%r8 t2 ++
+				(* Compare the types and the values. *)
 				xorq !%r9 !%r9 ++
+				movq (imm 1) !%r8 ++
+				cmpq t1 t2 ++
+				cmovnzq !%r9 !%r8 ++
+				cmpq v1 v2 ++
+				cmovnzq !%r9 !%r8
+			| Neq	->
+				(* Result in r8. *)
+				(* Transform bool to int.
+				Idea from Samuel and Constantin (used with permission). *)
+				movq (imm t_int) !%r8 ++
+				cmpq (imm t_bool) t1 ++
+				cmovzq !%r8 t1 ++
 				cmpq (imm t_bool) t2 ++
-				cmovzq (imm 1) !%r9 ++
-				cmpq (imm t_int) t2 ++
-				cmovzq (imm 1) !%r9 ++ *)
+				cmovzq !%r8 t2 ++
+				(* Compare the types and the values. *)
+				xorq !%r9 !%r9 ++
+				movq (imm 1) !%r8 ++
+				cmpq t1 t2 ++
+				cmovnzq !%r9 !%r8 ++
+				cmpq v1 v2 ++
+				cmovnzq !%r9 !%r8 ++
+				xorq (imm 1) !%r8
 			| L		-> assert false
 			| Leq	-> assert false
 			| G		-> assert false
@@ -394,8 +369,8 @@ let rec compile_expr te = match te.te_e with
 		(match op with
 			| Add | Sub | Mul | Or | And -> pushq t1 ++ pushq v1
 			| Mod | Pow -> pushq (imm t_int) ++ pushq !%rdx
-			| Eq -> pushq (imm t_bool) ++ pushq !%rdi
-			| Neq | L | Leq | G | Geq -> assert false) (* TODO *)
+			| Eq | Neq -> pushq (imm t_bool) ++ pushq !%r8
+			| L | Leq | G | Geq -> assert false) (* TODO *)
 
 	| _ -> pushq (imm 0) ++ pushq (imm 0) (* TODO *)
 
