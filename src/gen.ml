@@ -195,7 +195,7 @@ let code_stdlib =
 
 let data_stdlib =
 	(* Data for the print functions. *)
-	(label ".Sprint_nothing" ++ string "Nothing") ++
+	(label ".Sprint_nothing" ++ string "nothing") ++
 	(label ".Sprint_int" ++ string "%ld") ++
 	(label ".Sprint_true" ++ string "true") ++
 	(label ".Sprint_false" ++ string "false")
@@ -244,35 +244,88 @@ let rec compile_expr te = match te.te_e with
 		xorq (imm 1) !%rax ++
 		pushq !%rbx ++
 		pushq !%rax
-	(*
-	| TBinop (te1, op, te2) when op = Add || op = Or -> (* TODO *)
+	| TBinop (te1, Or, te2) ->
 		(* Lazy evalutation. *)
 		let v1 = !%rax in
 		let t1 = !%rbx in
 		let v2 = !%rcx in
 		let t2 = !%rdx in
+		let or_true = distinct_label ".or_true" in
+		let or_end = distinct_label ".or_end" in
+		xorq !%r8 !%r8 ++
 
+		(* Evaluate te1. *)
 		compile_expr te1 ++
 		popq rax ++ (* Value 1. *)
 		popq rbx ++ (* Type 1. *)
 		(* Type check te1. *)
 		cmpq (imm t_bool) t1 ++
-		error jnz "Type error: Boolean operations take a bool as a first argument." ++
-		pushq t1 ++
-		pushq v1 ++
+		error jnz "Type error: Or takes a bool as a first argument." ++
 
+		(* Test if v1 is true. *)
 		testq v1 v1 ++
-		jnz
+		jnz or_true ++
 
+		(* Evaluate te2. *)
 		compile_expr te2 ++
 		popq rcx ++ (* Value 2. *)
 		popq rdx ++ (* Type 2. *)
 		(* Type check te2. *)
 		cmpq (imm t_bool) t2 ++
-		error jnz "Type error: Boolean operations take a bool as a second argument."
-	*)
+		error jnz "Type error: Or takes a bool as a second argument." ++
+
+		(* Test if v2 is false. *)
+		testq v2 v2 ++
+		jz or_end ++
+
+		label or_true ++
+		movq (imm 1) !%r8 ++
+
+		label or_end ++
+		pushq (imm t_bool) ++
+		pushq !%r8
+	| TBinop (te1, And, te2) ->
+		(* Lazy evalutation. *)
+		let v1 = !%rax in
+		let t1 = !%rbx in
+		let v2 = !%rcx in
+		let t2 = !%rdx in
+		let and_false = distinct_label ".and_false" in
+		let and_end = distinct_label ".and_end" in
+		movq (imm 1) !%r8 ++
+
+		(* Evaluate te1. *)
+		compile_expr te1 ++
+		popq rax ++ (* Value 1. *)
+		popq rbx ++ (* Type 1. *)
+		(* Type check te1. *)
+		cmpq (imm t_bool) t1 ++
+		error jnz "Type error: And takes a bool as a first argument." ++
+
+		(* Test if v1 is false. *)
+		testq v1 v1 ++
+		jz and_false ++
+
+		(* Evaluate te2. *)
+		compile_expr te2 ++
+		popq rcx ++ (* Value 2. *)
+		popq rdx ++ (* Type 2. *)
+		(* Type check te2. *)
+		cmpq (imm t_bool) t2 ++
+		error jnz "Type error: And takes a bool as a second argument." ++
+
+		(* Test if v2 is true. *)
+		testq v2 v2 ++
+		jnz and_end ++
+
+		label and_false ++
+		xorq !%r8 !%r8 ++
+
+		label and_end ++
+		pushq (imm t_bool) ++
+		pushq !%r8
+
 	| TBinop (te1, op, te2) ->
-		(* TODO lazy and or. *)
 		let v1 = !%rax in
 		let t1 = !%rbx in
 		let v2 = !%rcx in
@@ -293,11 +346,7 @@ let rec compile_expr te = match te.te_e with
 				error jnz "Type error: Arithmetic operations take an int as a first argument." ++
 				cmpq (imm t_int) t1 ++
 				error jnz "Type error: Arithmetic operations take an int as a second argument."
-			| And | Or ->
-				cmpq (imm t_bool) t1 ++
-				error jnz "Type error: Boolean operations take a bool as a first argument." ++
-				cmpq (imm t_bool) t2 ++
-				error jnz "Type error: Boolean operations take a bool as a second argument."
+			| And | Or -> failwith "And and Or are compiled separately."
 			| Eq | Neq ->
 				(* Transform bool to int.
 				Idea from Samuel and Constantin (used with permission). *)
@@ -332,8 +381,7 @@ let rec compile_expr te = match te.te_e with
 				cqto ++
 				idivq v2
 			| Pow	-> call ".pow"
-			| And	-> andq v2 v1
-			| Or	-> orq v2 v1
+			| And | Or -> failwith "And and Or are compiled separately."
 			| Eq	->
 				xorq !%r9 !%r9 ++
 				movq (imm 1) !%r8 ++
@@ -368,7 +416,8 @@ let rec compile_expr te = match te.te_e with
 
 		(* Push the result. *)
 		(match op with
-			| Add | Sub | Mul | Or | And -> pushq t1 ++ pushq v1
+			| Add | Sub | Mul -> pushq t1 ++ pushq v1
+			| And | Or -> failwith "And and Or are compiled separately."
 			| Mod | Pow -> pushq (imm t_int) ++ pushq !%rdx
 			| Eq | Neq | L | Leq | G | Geq  -> pushq (imm t_bool) ++ pushq !%r8)
 
