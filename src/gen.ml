@@ -203,7 +203,7 @@ let data_stdlib =
 (* Compilation. *)
 let rec compile_expr te = match te.te_e with
 	(* Constants. *)
-	| TInt n	-> pushq (imm t_int) ++ pushq (imm64 n)
+	| TInt n	-> pushq (imm t_int) ++ movq (imm64 n) !%rax ++ pushq !%rax
 	| TStr s	-> pushq (imm t_str) ++ pushq (ilab (distinct_string s))
 	| TBool b	-> pushq (imm t_bool) ++ pushq (imm (if b then 1 else 0))
 
