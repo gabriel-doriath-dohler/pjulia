@@ -63,6 +63,7 @@ assembly from OCaml.
 - `testfile-affect-3.jl`
 - `testfile-affect-4.jl`
 - `testfile-affect-5.jl`
+- `testfile-local.jl`
 - `testfile-return-2.jl`
 - `testfile-for-1.jl`
 - `testfile-for-2.jl`
@@ -73,10 +74,13 @@ assembly from OCaml.
 - `testfile-while-2.jl`
 - `testfile-while-3.jl`
 - `testfile-while-4.jl`
-- `issou.jl`
+- `testfile-issou.jl`
+- `testfile-depth.jl`
 ### tests/exec/
+- `depth.jl`
 - `fib_rec.jl`
 - `jpp.jl`
+- `local.jl`
 - `print_return.jl`
 - `struct2.jl`
 - `syracuse.jl`
