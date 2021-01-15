@@ -171,6 +171,10 @@ val movq: [`Q] operand -> [`Q] operand -> text
 
 val cmovzq: [`Q] operand -> [`Q] operand -> text
 val cmovnzq: [`Q] operand -> [`Q] operand -> text
+val cmovlq: [`Q] operand -> [`Q] operand -> text
+val cmovleq: [`Q] operand -> [`Q] operand -> text
+val cmovgq: [`Q] operand -> [`Q] operand -> text
+val cmovgeq: [`Q] operand -> [`Q] operand -> text
 
 val movsbw: [`B] operand -> [`W] register -> text
 val movsbl: [`B] operand -> [`L] register -> text

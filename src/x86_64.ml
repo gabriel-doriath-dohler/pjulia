@@ -147,6 +147,10 @@ let movq a b = ins "movq %a, %a" a () b ()
 
 let cmovzq a b = ins "cmovzq %a, %a" a () b ()
 let cmovnzq a b = ins "cmovnzq %a, %a" a () b ()
+let cmovlq a b = ins "cmovlq %a, %a" a () b ()
+let cmovleq a b = ins "cmovleq %a, %a" a () b ()
+let cmovgq a b = ins "cmovgq %a, %a" a () b ()
+let cmovgeq a b = ins "cmovgeq %a, %a" a () b ()
 
 let movabsq a b = ins "movabsq %a, %s" a () b
 
