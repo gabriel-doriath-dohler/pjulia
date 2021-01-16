@@ -287,10 +287,10 @@ let rec compile_expr te = match te.te_e with
 		let t2 = !%rdx in
 		let or_true = distinct_label ".or_true" in
 		let or_end = distinct_label ".or_end" in
-		xorq !%r8 !%r8 ++
 
 		(* Evaluate te1. *)
 		compile_expr te1 ++
+		xorq !%r8 !%r8 ++
 		popq rax ++ (* Value 1. *)
 		popq rbx ++ (* Type 1. *)
 		(* Type check te1. *)
@@ -303,6 +303,7 @@ let rec compile_expr te = match te.te_e with
 
 		(* Evaluate te2. *)
 		compile_expr te2 ++
+		xorq !%r8 !%r8 ++
 		popq rcx ++ (* Value 2. *)
 		popq rdx ++ (* Type 2. *)
 		(* Type check te2. *)
