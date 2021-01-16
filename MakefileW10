@@ -1,0 +1,54 @@
+all: pjuliac.exe
+	dune exec src/./pjuliac.exe -- -i tests/test.jl
+
+print: pjuliac.exe
+	dune exec src/./pjuliac.exe -- --print -i tests/test.jl
+
+pjuliac.exe:
+	dune build src/pjuliac.exe
+
+explain: pjuliac.exe
+	menhir --base /tmp/parser --dump --explain src/parser.mly
+	cat /tmp/parser.conflicts
+
+tests: pjuliac.exe
+	./tests/run_tests -all "dune exec src/./pjuliac.exe --"
+
+vtests: pjuliac.exe
+	./tests/run_tests -vall "dune exec src/./pjuliac.exe --"
+
+test1: pjuliac.exe
+	./tests/run_tests -1 "dune exec src/./pjuliac.exe --"
+
+vtest1: pjuliac.exe
+	./tests/run_tests -v1 "dune exec src/./pjuliac.exe --"
+
+test2: pjuliac.exe
+	./tests/run_tests -2 "dune exec src/./pjuliac.exe --"
+
+vtest2: pjuliac.exe
+	./tests/run_tests -v2 "dune exec src/./pjuliac.exe --"
+
+test3: pjuliac.exe
+	./tests/run_tests -3 "dune exec src/./pjuliac.exe --"
+
+vtest3: pjuliac.exe
+	./tests/run_tests -v3 "dune exec src/./pjuliac.exe --"
+
+testi: pjuliac.exe
+	./tests/run_tests -i "dune exec src/./pjuliac.exe -- -i"
+
+vtesti: pjuliac.exe
+	./tests/run_tests -vi "dune exec src/./pjuliac.exe -- -i"
+
+clean:
+	dune clean
+	rm -f /tmp/parser.conflicts
+	rm -f pjuliac
+	rm -f *.s
+	rm -f tests/*.s
+	rm -f tests/exec/*.s
+	rm -f tests/exec-fail/*.s
+	rm -f out
+
+.PHONY: all print explain tests vtests test1 vtest1 test2 vtest2 clean
