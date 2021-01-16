@@ -63,7 +63,6 @@ assembly from OCaml.
 - `testfile-affect-3.jl`
 - `testfile-affect-4.jl`
 - `testfile-affect-5.jl`
-- `testfile-local.jl`
 - `testfile-return-2.jl`
 - `testfile-for-1.jl`
 - `testfile-for-2.jl`
@@ -90,3 +89,5 @@ assembly from OCaml.
 - `for7.jl`
 - `print.jl`
 - `z.jl`
+### tests/exec-fail/
+- `local.jl`
