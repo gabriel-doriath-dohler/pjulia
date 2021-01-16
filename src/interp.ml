@@ -58,7 +58,6 @@ let interp_binop op v1 v2 = match op, v1, v2 with
   | Geq, Vint n1, Vint n2 -> boolint (n1 >= n2)
   | _ -> error "Unsupported operand types"
 
-
 let is_true = function
   | (Vint 1|Vbool 1) -> true
   | (Vint 0|Vbool 0) -> false
@@ -67,7 +66,6 @@ let is_true = function
 
 
 let file l =
-
   (*function maps a function name to the function*)
   (*structures maps a structure name to the structure*)
   (*fields maps a field name to the corresponding structure*)
@@ -120,11 +118,16 @@ let rec interp_expr expr = let l , e = expr in match e with
       | _ -> error "This expression is not a structure")
 
   | Affect((_,Var (_,x)),e) -> vars := Imap.add x (interp_expr e) !vars; Vnothing
-  | Affect((_,Field(e1,(_,x))),e2) -> if not (Imap.mem x fields) then error "Unbound field";
-      let v = interp_expr e2 in
-      (match interp_expr e2 with
-        | Vstruc l0 -> let l = try assoc_replace x v l0 with Not_found -> error "Field incompatible with structure" in Vstruc l
+  | Affect((_,Field(e1,(_,fld))),e2) -> if not (Imap.mem fld fields) then error "Unbound field";
+      if not ((Imap.find fld fields).f_mutable) then error "Unmutable structure";
+      let w = interp_expr e2 in
+      (try
+        let x, v0 = var_of_expr e1 in if v0 != (Imap.find x !vars) then error "Unexpected behaviour on affecting field" else let v = (match v0 with
+        | Vstruc l0 -> let l = try assoc_replace fld w l0 with Not_found -> error "Field incompatible with structure" in Vstruc l
         | _ -> error "This expression is not a structure")
+        in vars := Imap.add x v !vars;
+        Vnothing
+      with Not_found -> w)
 
   | Return None -> break Vnothing
   | Return (Some e) -> break (interp_expr e)
@@ -190,13 +193,30 @@ and interp_struc s b =
     | [], [] -> []
     | x::flds, e::b -> (snd x.p_name, interp_expr e)::(aux flds b)
     | _ -> error "Unexpected number of fields"
-  in Vstruc (aux s.f_params b) in
+  in Vstruc (aux s.f_params b)
 
 
+(*Used only when changing a field : if the expression the field is attached to
+is a variable or a block of blocks/variables, return the first variable with its value,
+else raise Not_found. Also interpret the expr for eventual side effects*)
+and var_of_expr e =
+  (*returns variable as an option and its value*)
+  let rec aux expr = let l , e = expr in match e with
+    | Lval(_,Var(_,x)) -> Some x, interp_expr expr
+    | Lval(_,Field(e,(_,x))) -> (* TO DO *) error "Not implemented yet"
+    | Par [] -> None, Vnothing
+    | Par (e::b) -> let x0, v = aux e in
+        (try Some (Option.get x0), v with Invalid_argument _ ->
+          if v = Vnothing then aux (l,(Par b))
+          else None, v)
+    | _ -> None, interp_expr expr
 
-  let interp = function
-    | Func _ -> ()
-    | Expr e -> let v = try interp_expr e with Ereturn v -> v in print_value v
-  in
+  in try let x0, v = aux e in Option.get x0, v with Invalid_argument _ -> raise Not_found
 
-  List.iter interp l;
+
+in let interp = function
+  | Func _ -> ()
+  | Expr e -> let v = try interp_expr e with Ereturn v -> v in print_value v
+in
+
+List.iter interp l;
