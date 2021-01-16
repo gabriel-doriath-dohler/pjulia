@@ -274,7 +274,8 @@ let type2_func env f =
 		tf_body = { block_type = Typ.Nothing; block_b = []};
 		tf_is_constructor = f.f_is_constructor;
 		tf_mutable = f.f_mutable;
-		tf_env = Env.empty_env; }
+		tf_env = Env.empty_env;
+		tf_fpmax = 0; }
 
 	(* Function. *)
 	else begin
@@ -292,7 +293,8 @@ let type2_func env f =
 			tf_body = tb;
 			tf_is_constructor = f.f_is_constructor;
 			tf_mutable = f.f_mutable;
-			tf_env = lenv; } in
+			tf_env = lenv;
+			tf_fpmax = 0; } in
 		Env.add_tfunction tf;
 		tf
 	end

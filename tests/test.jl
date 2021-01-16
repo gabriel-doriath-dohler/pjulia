@@ -174,3 +174,70 @@ println((println(1); true) && ((println(2); true) && (println(3); false)))
 println((println(1); true) && (println(2); true) && (println(3); true))
 println((println(1); false) || (println(2); false) || (println(3); true))
 println((println(1); false) || (println(2); true) || (println(3); true))
+x = 42
+y = x
+println(x, " ", y)
+y = 3
+println(x, " ", y)
+println()
+if true
+	println("True")
+else
+	println("False")
+end
+if false
+	println("True")
+else
+	println("False")
+end
+x = 3
+if x + 5 > 8
+	println("case 1")
+elseif x + 6 > 8
+	println("case 2")
+else
+	println("case 3")
+end
+x = -1
+if x + 5 > 8
+	println("case 1")
+elseif x + 6 > 8
+	println("case 2")
+else
+	println("case 3")
+end
+x = 100
+if x + 5 > 8
+	println("case 1")
+elseif x + 6 > 8
+	println("case 2")
+else
+	println("case 3")
+end
+
+x = 100
+if x + 5 > 8
+	println("case 1")
+	if x % 2 == 0
+		println("even")
+	else
+		println("odd")
+	end
+elseif x + 6 > 8
+	println("case 2")
+else
+	println("case 3")
+end
+x = 101
+if x + 5 > 8
+	println("case 1")
+	if x % 2 == 0
+		println("even")
+	else
+		println("odd")
+	end
+elseif x + 6 > 8
+	println("case 2")
+else
+	println("case 3")
+end

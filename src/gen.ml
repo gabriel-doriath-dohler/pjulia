@@ -1,8 +1,55 @@
+open Ast
 open Tast
 open X86_64
 open Format
 
-let popn n =
+(*
+let alloc_expr env fpcur = function
+	(* Constants. *)
+	| TInt _ | TStr _ | TBool _ -> fpmax
+
+	(* Expressions with parentheses. *)
+	| TPar tb -> alloc_bloc env fpmax tb
+	| TCall (* TODO *)
+
+	(* Operations. *)
+	| TNot te -> alloc_expr env fpmax te
+	| TBinop (te1, _, te2) ->
+		let fpmax_1 = alloc_expr env fpmax te1 in
+		alloc_expr env fpmax_1 te2
+
+	| TLval _
+	| TAffect
+	| TReturn
+
+	(* Control structures. *)
+	| TFor
+	| TWhile
+	| TIf
+
+let alloc_bloc env fpcur tb =
+	List.fold_right
+		(fun te fpmax_1 -> max fpmax_1 (alloc_expr env fpmax_1 te))
+		tb.block_b
+		fpmax
+
+let alloc_func tf =
+	(* Allocate the arguments. *)
+	let n = List.length tf.tf_params in
+	List.iteri
+		(fun i p -> Env.func_add_ofs tf (snd p.p_name) (16 * (n - i)))
+		tf.tf_params;
+	(* Allocate the local variables. *)
+	func_set_fpmax tf (alloc_bloc tf.tf_env 0 tf.tf_body)
+
+let alloc_stmt = function
+	| TFunc tf -> alloc_func tf
+	| TExpr te -> () (* TODO *)
+
+let alloc tast = List.iter alloc_stmt tast
+*)
+
+let popn n = (* TODO undefined *)
 	if n = 0 then nop
 	else addq (imm n) !%rsp
 
@@ -218,18 +265,21 @@ let rec compile_expr te = match te.te_e with
 
 	(* Expressions with parentheses. *)
 	| TPar tb -> (* TODO *)
+		compile_bloc tb
+		(*
 		List.fold_left (fun c e -> c ++ compile_expr e) nop tb.block_b ++
 		popq rax ++
 		popq rbx ++
 		popn (16 * (List.length tb.block_b - 1)) ++
 		pushq !%rbx ++
-		pushq !%rax
+		pushq !%rax *)
 	| TCall ((_, name), args, f_list) ->
 		let nb_args = List.length args in
 
 		(* Compile the arguments and put them on the stack. *)
 		List.fold_left (fun code arg -> compile_expr arg ++ code) nop args ++
 
+		(* TODO ne pas pop les arguments *)
 		(* Compile the body of the function. *)
 		(match name with
 			| "print" ->
@@ -494,7 +544,35 @@ let rec compile_expr te = match te.te_e with
 			failwith "Local variables are not implemented."
 
 	(* Control structures. *)
+	| TIf (cond, tb, teb) ->
+		let else_label = distinct_label "else_label" in
+		let if_end = distinct_label "if_end" in
+		compile_expr cond ++
+		popq rax ++ (* Value. *)
+		popq rbx ++ (* Type. *)
+
+		(* Type check. *)
+		cmpq (imm t_bool) !%rbx ++
+		error jnz "Type error: The condition of an if should have the type bool." ++
+
+		testq !%rax !%rax ++
+		jz else_label ++
+
+		compile_bloc tb ++
+		jmp if_end ++
+
+		label else_label ++
+		compile_bloc teb ++
+
+		label if_end
 	| _ -> pushq (imm 0) ++ pushq (imm 0) (* TODO *)
+
+and compile_bloc tb = compile_expr_list tb.block_b
+
+and compile_expr_list = function
+	| []		-> pushq (imm t_nothing) ++ pushq (imm 0)
+	| [te]		-> compile_expr te
+	| te :: tb	-> compile_expr te ++ popn 16 ++ compile_expr_list tb
 
 let compile_stmt (code_func, code) = function
 	| TExpr texpr -> code_func, code ++ compile_expr texpr
@@ -502,6 +580,7 @@ let compile_stmt (code_func, code) = function
 
 let gen genv tast ofile =
 	env := genv;
+	(* alloc tast; *)
 
 	(* Code generation. *)
 	let code_func, code = List.fold_left compile_stmt (nop, nop) tast in

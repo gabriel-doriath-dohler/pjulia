@@ -6,7 +6,7 @@ open Tast
 let genv = Imap.singleton "nothing" Typ.Nothing
 let lenv = Imap.empty
 
-let empty_env = { g = genv; l = lenv }
+let empty_env = { g = genv; l = lenv; ofs = Imap.empty }
 
 (* Set of declared types. *)
 let declared_types:((Typ.t, unit) Hashtbl.t) = Hashtbl.create 16
@@ -77,6 +77,12 @@ let compatible_functions name t_list =
 		(fun (arguments_type, return_type, _) -> (arguments_type, return_type))
 		(Hashtbl.find_all func name) in
 	List.filter (is_function_compatible t_list) f_list
+
+let func_add_ofs tf var var_ofs =
+	tf.tf_env.ofs <- Imap.add var var_ofs tf.tf_env.ofs
+
+let func_set_fpmax tf fpmax=
+	tf.tf_fpmax <- fpmax
 
 (* For fields. *)
 let is_field_defined field_name =
