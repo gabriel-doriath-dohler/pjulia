@@ -161,3 +161,11 @@ println("div(0, 42) = ", div(0, 42))
 println("div(99, 8) = ", div(99, 8))
 println("div(99, 9) = ", div(99, 9))
 println("div(99, 10) = ", div(99, 10))
+
+x = 42
+println(x)
+y =x ^42
+z=println(x ^42)
+println(y)
+println(z)
+println((x + y)+3-9*y*(3+x))

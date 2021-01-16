@@ -145,6 +145,8 @@ let print =
 	cmpq (imm t_bool) !%rdi ++
 	jz ".print_bool" ++
 
+	movq !%rdi !%rsi ++ (* TODO *)
+	jmp ".print_int" ++
 	error jmp "Print cannot print this type." ++
 
 	label ".print_end" ++
@@ -200,8 +202,18 @@ let data_stdlib =
 	(label ".Sprint_true" ++ string "true") ++
 	(label ".Sprint_false" ++ string "false")
 
+(* Global variables. *)
+let label_type_from_gvar var =
+	sprintf "gvar_type_%s" var
+
+let label_value_from_gvar var =
+	sprintf "gvar_value_%s" var
+
 (* Compilation. *)
-let rec compile_expr te = match te.te_e with
+let fpcur = ref 0
+let env = ref Env.empty_env (* TODO update when changes env. *)
+
+let rec compile_expr te offset = match te.te_e with
 	(* Constants. *)
 	| TInt n	-> pushq (imm t_int) ++ movq (imm64 n) !%rax ++ pushq !%rax
 	| TStr s	-> pushq (imm t_str) ++ pushq (ilab (distinct_string s))
@@ -209,7 +221,7 @@ let rec compile_expr te = match te.te_e with
 
 	(* Expressions with parentheses. *)
 	| TPar tb -> (* TODO *)
-		List.fold_left (fun c e -> c ++ compile_expr e) nop tb.block_b ++
+		List.fold_left (fun c e -> c ++ compile_expr e offset) nop tb.block_b ++
 		popq rax ++
 		popq rbx ++
 		popn (16 * (List.length tb.block_b - 1)) ++
@@ -219,7 +231,7 @@ let rec compile_expr te = match te.te_e with
 		let nb_args = List.length args in
 
 		(* Compile the arguments and put them on the stack. *)
-		List.fold_left (fun code arg -> compile_expr arg ++ code) nop args ++
+		List.fold_left (fun code arg -> compile_expr arg offset ++ code) nop args ++
 
 		(* Compile the body of the function. *)
 		(match name with
@@ -259,7 +271,7 @@ let rec compile_expr te = match te.te_e with
 
 	(* Operations. *)
 	| TNot te	->
-		compile_expr te ++
+		compile_expr te offset ++
 		popq rax ++ (* Value. *)
 		popq rbx ++ (* Type. *)
 
@@ -281,7 +293,7 @@ let rec compile_expr te = match te.te_e with
 		xorq !%r8 !%r8 ++
 
 		(* Evaluate te1. *)
-		compile_expr te1 ++
+		compile_expr te1 offset ++
 		popq rax ++ (* Value 1. *)
 		popq rbx ++ (* Type 1. *)
 		(* Type check te1. *)
@@ -293,7 +305,7 @@ let rec compile_expr te = match te.te_e with
 		jnz or_true ++
 
 		(* Evaluate te2. *)
-		compile_expr te2 ++
+		compile_expr te2 offset ++
 		popq rcx ++ (* Value 2. *)
 		popq rdx ++ (* Type 2. *)
 		(* Type check te2. *)
@@ -321,7 +333,7 @@ let rec compile_expr te = match te.te_e with
 		movq (imm 1) !%r8 ++
 
 		(* Evaluate te1. *)
-		compile_expr te1 ++
+		compile_expr te1 offset ++
 		popq rax ++ (* Value 1. *)
 		popq rbx ++ (* Type 1. *)
 		(* Type check te1. *)
@@ -333,7 +345,7 @@ let rec compile_expr te = match te.te_e with
 		jz and_false ++
 
 		(* Evaluate te2. *)
-		compile_expr te2 ++
+		compile_expr te2 offset ++
 		popq rcx ++ (* Value 2. *)
 		popq rdx ++ (* Type 2. *)
 		(* Type check te2. *)
@@ -356,8 +368,8 @@ let rec compile_expr te = match te.te_e with
 		let t1 = !%rbx in
 		let v2 = !%rcx in
 		let t2 = !%rdx in
-		compile_expr te1 ++
-		compile_expr te2 ++
+		compile_expr te1 offset ++
+		compile_expr te2 offset ++
 
 		popq rcx ++ (* Value 2. *)
 		popq rdx ++ (* Type 2. *)
@@ -447,18 +459,52 @@ let rec compile_expr te = match te.te_e with
 			| Mod | Pow -> pushq (imm t_int) ++ pushq !%rdx
 			| Eq | Neq | L | Leq | G | Geq  -> pushq (imm t_bool) ++ pushq !%r8)
 
+	| TLval { lvalue_loc = _; lvalue_type = _; lvalue_lvalue = TVar (l, var); } ->
+		if Env.is_global var !env then
+			(* Verify that the variable is defined. *)
+			movq (lab (label_type_from_gvar var)) !%rax ++
+			cmpq (imm t_undef) !%rax ++
+			error jz (sprintf "Variable %s undefined." var) ++
+
+			pushq !%rax ++
+			pushq (lab (label_value_from_gvar var))
+		else
+			failwith "Local variables are not implemented."
+		(* ajoute le décalage de la var offset
+		augmente fpcur
+		mettre fpcur à 0 quand il faut *)
+	| TAffect ({ lvalue_loc = _; lvalue_type = _; lvalue_lvalue = TVar (l, var); }, te1) ->
+		compile_expr te1 offset ++
+		popq rax ++ (* Value. *)
+		popq rbx ++ (* Type. *)
+		if Env.is_global var !env then
+			movq !%rax (lab (label_value_from_gvar var)) ++
+			movq !%rbx (lab (label_type_from_gvar var)) ++
+			pushq !%rbx ++
+			pushq !%rax
+		else
+			failwith "Local variables are not implemented."
 	| _ -> pushq (imm 0) ++ pushq (imm 0) (* TODO *)
 
+(* TODO offset *)
 let compile_stmt (code_func, code) = function
-	| TExpr texpr -> code_func, code ++ compile_expr texpr
+	| TExpr texpr -> code_func, code ++ compile_expr texpr Imap.empty
 	| TFunc tfunc -> code_func, code (* TODO *)
 
-let gen tast ofile =
-	(* Allocation. *)
-	(* let p = alloc tast in *) (* TODO *)
+let gen genv tast ofile =
+	env := genv;
 
 	(* Code generation. *)
 	let code_func, code = List.fold_left compile_stmt (nop, nop) tast in
+
+	(* Add the global variables to the data segment. *)
+	let data_gvar = Imap.fold
+		(fun var _ c ->
+			label (label_type_from_gvar var) ++
+			dquad [t_undef] ++
+			label (label_value_from_gvar var) ++
+			dquad [0] ++ c)
+		genv.g nop in
 
 	(* Add the strings to the data segment. *)
 	let data_string = Hashtbl.fold
@@ -483,6 +529,11 @@ let gen tast ofile =
 			(* Keep %rsp in %r15 for error handeling. *)
 			movq !%rsp !%r15 ++
 			movq !%rsp !%rbp ++
+			(* Define nothing. *)
+			xorq !%rax !%rax ++
+			movq (imm t_nothing) !%rbx ++
+			movq !%rax (lab (label_value_from_gvar "nothing")) ++
+			movq !%rbx (lab (label_type_from_gvar "nothing")) ++
 
 			comment "Code of the program." ++
 			code ++
@@ -502,6 +553,8 @@ let gen tast ofile =
 			comment "Code for error handeling." ++
 			code_error;
 		data =
+			comment "Data for global variables." ++
+			data_gvar ++
 			comment "Data for strings." ++
 			data_string ++
 			comment "Data for stdlib." ++

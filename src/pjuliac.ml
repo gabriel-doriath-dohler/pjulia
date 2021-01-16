@@ -101,7 +101,7 @@ let () =
 		if not !interp then begin
 			(* Compile. *)
 			let ofile = (Filename.remove_extension !file) ^ ".s" in
-			Gen.gen tast ofile;
+			Gen.gen genv tast ofile;
 		end else begin
 			Interp.file ast;
 		end

@@ -3,7 +3,7 @@ open Ast
 open Tast
 
 (* Map an ident name to its type. *)
-let genv = Imap.add "nothing" Typ.Nothing Imap.empty
+let genv = Imap.singleton "nothing" Typ.Nothing
 let lenv = Imap.empty
 
 let empty_env = { g = genv; l = lenv }
