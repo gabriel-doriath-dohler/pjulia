@@ -2,6 +2,7 @@ open Format
 open Ast
 
 module Imap = Map.Make(String)
+type env = { g : Typ.t Imap.t; l : Typ.t Imap.t}
 
 type texpr =
 	{ te_loc : loc;
@@ -34,12 +35,12 @@ and non_loc_texpr =
 and texpr_for =
 	{ for_loc : loc;
 	for_expr : ident * texpr * texpr * tblock;
-	for_env : Typ.t Imap.t; }
+	for_env : env; }
 
 and texpr_while =
 	{ while_loc : loc;
 	while_expr : texpr * tblock;
-	while_env : Typ.t Imap.t; }
+	while_env : env; }
 
 and tblock =
 	{ block_type : Typ.t;
@@ -62,7 +63,7 @@ and tfunc =
 	tf_body : tblock;
 	tf_is_constructor : bool;
 	tf_mutable : bool;
-	tf_env : Typ.t Imap.t; }
+	tf_env : env; }
 
 type tdecl = TFunc of tfunc | TExpr of texpr
 

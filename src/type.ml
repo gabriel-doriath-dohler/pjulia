@@ -3,7 +3,7 @@ open Tast
 open Format
 
 (* TODO comment *)
-let redef = ref false
+let global = ref true
 
 (* First part. *)
 
@@ -76,11 +76,17 @@ let rec type1_expr env e = match snd e with
 		type1_expr (type1_expr env e1) e2
 	| Affect ((_, Var (_, var)), e1) ->
 		let var_type =
-			if !redef then Typ.Any
-			else (try Env.type_of var env
-				with Not_found -> Typ.Any)
+			try
+				if !global then
+					Env.type_of var env
+				else
+					Env.local_type_of var env
+			with Not_found -> Typ.Any
 		in
-		Env.add_variable var var_type (type1_expr env e1)
+		if !global then
+			Env.add_global_variable var var_type (type1_expr env e1)
+		else
+			Env.add_local_variable var var_type (type1_expr env e1)
 	| If (e1, b1, b2) -> type1_block (type1_block env (e1 :: b1)) b2
 	| _ -> env
 
@@ -215,7 +221,7 @@ let rec type2_expr env e =
 			let te2 = type2_expr env e2 in
 			Typ.assert_compatible te1.te_loc te1.te_type Typ.Int64;
 			Typ.assert_compatible te2.te_loc te2.te_type Typ.Int64;
-			let env_idx = Env.add_variable (snd idx) Typ.Int64 env in
+			let env_idx = Env.add_local_variable (snd idx) Typ.Int64 env in
 			let lenv = type1_block env_idx b in
 			let tb = type2_block lenv b in
 			TFor { for_loc = fst e;
@@ -268,12 +274,12 @@ let type2_func env f =
 		tf_body = { block_type = Typ.Nothing; block_b = []};
 		tf_is_constructor = f.f_is_constructor;
 		tf_mutable = f.f_mutable;
-		tf_env = Imap.empty; }
+		tf_env = Env.empty_env; }
 
 	(* Function. *)
 	else begin
 		let env_param = List.fold_left
-			(fun e -> fun p -> Env.add_variable (snd p.p_name) p.p_type e) env f.f_params in
+			(fun e -> fun p -> Env.add_local_variable (snd p.p_name) p.p_type e) env f.f_params in
 		let lenv = type1_block env_param f.f_body in
 		let tb = type2_block lenv f.f_body in
 		Typ.assert_compatible f.f_loc tb.block_type f.f_type; (* TODO loc *)
@@ -304,8 +310,8 @@ let rec type2 env = function
 
 let typing ast =
 	(* Construct the typed ast, the global environment, the local environments and type check. *)
-	let genv = type1 Env.bindings ast in
-	redef := true;
+	let genv = type1 Env.empty_env ast in
+	global := false;
 	let tast = type2 genv ast in
 	genv, tast
 

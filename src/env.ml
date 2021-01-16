@@ -3,8 +3,10 @@ open Ast
 open Tast
 
 (* Map an ident name to its type. *)
-module Imap = Map.Make(String)
-let bindings = Imap.add "nothing" Typ.Nothing Imap.empty
+let genv = Imap.add "nothing" Typ.Nothing Imap.empty
+let lenv = Imap.empty
+
+let empty_env = { g = genv; l = lenv }
 
 (* Set of declared types. *)
 let declared_types:((Typ.t, unit) Hashtbl.t) = Hashtbl.create 16
@@ -23,14 +25,27 @@ let h_type_of_field:((string, Typ.t) Hashtbl.t) = Hashtbl.create 16
 (* Helper functions. *)
 
 (* For variables. *)
-let add_variable name typ env =
-	Imap.add name typ env
+let add_local_variable name typ env =
+	{ env with l = Imap.add name typ env.l }
+
+let add_global_variable name typ env =
+	{ env with g = Imap.add name typ env.g }
+
+let is_local name env =
+	Imap.mem name env.l
+
+let is_global name env =
+	not (is_local name env) && Imap.mem name env.g
 
 let type_of name env =
-	Imap.find name env
+	try Imap.find name env.l
+	with Not_found -> Imap.find name env.g
+
+let local_type_of name env =
+	Imap.find name env.l
 
 let is_variable_defined name env =
-	Imap.mem name env
+	Imap.mem name env.l || Imap.mem name env.g
 
 let assert_variable_defined l name env =
 	if not (is_variable_defined name env) then
