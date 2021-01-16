@@ -229,6 +229,32 @@ let rec compile_expr te = match te.te_e with
 				popn (16 * nb_args) ++
 				pushq (imm t_nothing) ++
 				pushq (imm 0)
+			| "div" ->
+				let v1 = !%rax in
+				let t1 = !%rbx in
+				let v2 = !%rcx in
+				let t2 = !%rdx in
+				(* Type check. *)
+				movq (imm nb_args) !%r8 ++
+				cmpq (imm 2) !%r8 ++
+				error jnz "Div takes two arguments." ++
+
+				popq rax ++ (* Value 1. *)
+				popq rbx ++ (* Type 1. *)
+				popq rcx ++ (* Value 2. *)
+				popq rdx ++ (* Type 2. *)
+
+				cmpq (imm t_int) t1 ++
+				error jnz "Type error: Div's first argument should be an int." ++
+				cmpq (imm t_int) t2 ++
+				error jnz "Type error: Div's second argument should be an int." ++
+				testq v2 v2 ++
+				error jz "Division by zero." ++
+				(* Divide. *)
+				cqto ++
+				idivq v2 ++
+				pushq (imm t_int) ++
+				pushq v1
 			| _ -> popn (16 * nb_args)) (* TODO *)
 
 	(* Operations. *)
