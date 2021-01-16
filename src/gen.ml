@@ -145,8 +145,6 @@ let print =
 	cmpq (imm t_bool) !%rdi ++
 	jz ".print_bool" ++
 
-	movq !%rdi !%rsi ++ (* TODO *)
-	jmp ".print_int" ++
 	error jmp "Print cannot print this type." ++
 
 	label ".print_end" ++
@@ -210,10 +208,9 @@ let label_value_from_gvar var =
 	sprintf "gvar_value_%s" var
 
 (* Compilation. *)
-let fpcur = ref 0
 let env = ref Env.empty_env (* TODO update when changes env. *)
 
-let rec compile_expr te offset = match te.te_e with
+let rec compile_expr te = match te.te_e with
 	(* Constants. *)
 	| TInt n	-> pushq (imm t_int) ++ movq (imm64 n) !%rax ++ pushq !%rax
 	| TStr s	-> pushq (imm t_str) ++ pushq (ilab (distinct_string s))
@@ -221,7 +218,7 @@ let rec compile_expr te offset = match te.te_e with
 
 	(* Expressions with parentheses. *)
 	| TPar tb -> (* TODO *)
-		List.fold_left (fun c e -> c ++ compile_expr e offset) nop tb.block_b ++
+		List.fold_left (fun c e -> c ++ compile_expr e) nop tb.block_b ++
 		popq rax ++
 		popq rbx ++
 		popn (16 * (List.length tb.block_b - 1)) ++
@@ -231,7 +228,7 @@ let rec compile_expr te offset = match te.te_e with
 		let nb_args = List.length args in
 
 		(* Compile the arguments and put them on the stack. *)
-		List.fold_left (fun code arg -> compile_expr arg offset ++ code) nop args ++
+		List.fold_left (fun code arg -> compile_expr arg ++ code) nop args ++
 
 		(* Compile the body of the function. *)
 		(match name with
@@ -271,7 +268,7 @@ let rec compile_expr te offset = match te.te_e with
 
 	(* Operations. *)
 	| TNot te	->
-		compile_expr te offset ++
+		compile_expr te ++
 		popq rax ++ (* Value. *)
 		popq rbx ++ (* Type. *)
 
@@ -283,7 +280,7 @@ let rec compile_expr te offset = match te.te_e with
 		pushq !%rbx ++
 		pushq !%rax
 	| TBinop (te1, Or, te2) ->
-		(* Lazy evalutation. *)
+		(* Lazy evaluation. *)
 		let v1 = !%rax in
 		let t1 = !%rbx in
 		let v2 = !%rcx in
@@ -293,7 +290,7 @@ let rec compile_expr te offset = match te.te_e with
 		xorq !%r8 !%r8 ++
 
 		(* Evaluate te1. *)
-		compile_expr te1 offset ++
+		compile_expr te1 ++
 		popq rax ++ (* Value 1. *)
 		popq rbx ++ (* Type 1. *)
 		(* Type check te1. *)
@@ -305,7 +302,7 @@ let rec compile_expr te offset = match te.te_e with
 		jnz or_true ++
 
 		(* Evaluate te2. *)
-		compile_expr te2 offset ++
+		compile_expr te2 ++
 		popq rcx ++ (* Value 2. *)
 		popq rdx ++ (* Type 2. *)
 		(* Type check te2. *)
@@ -323,17 +320,17 @@ let rec compile_expr te offset = match te.te_e with
 		pushq (imm t_bool) ++
 		pushq !%r8
 	| TBinop (te1, And, te2) ->
-		(* Lazy evalutation. *)
+		(* Lazy evaluation. *)
 		let v1 = !%rax in
 		let t1 = !%rbx in
 		let v2 = !%rcx in
 		let t2 = !%rdx in
 		let and_false = distinct_label ".and_false" in
 		let and_end = distinct_label ".and_end" in
-		movq (imm 1) !%r8 ++
 
 		(* Evaluate te1. *)
-		compile_expr te1 offset ++
+		compile_expr te1 ++
+		movq (imm 1) !%r8 ++
 		popq rax ++ (* Value 1. *)
 		popq rbx ++ (* Type 1. *)
 		(* Type check te1. *)
@@ -345,7 +342,8 @@ let rec compile_expr te offset = match te.te_e with
 		jz and_false ++
 
 		(* Evaluate te2. *)
-		compile_expr te2 offset ++
+		compile_expr te2 ++
+		movq (imm 1) !%r8 ++
 		popq rcx ++ (* Value 2. *)
 		popq rdx ++ (* Type 2. *)
 		(* Type check te2. *)
@@ -362,14 +360,13 @@ let rec compile_expr te offset = match te.te_e with
 		label and_end ++
 		pushq (imm t_bool) ++
 		pushq !%r8
-
 	| TBinop (te1, op, te2) ->
 		let v1 = !%rax in
 		let t1 = !%rbx in
 		let v2 = !%rcx in
 		let t2 = !%rdx in
-		compile_expr te1 offset ++
-		compile_expr te2 offset ++
+		compile_expr te1 ++
+		compile_expr te2 ++
 
 		popq rcx ++ (* Value 2. *)
 		popq rdx ++ (* Type 2. *)
@@ -468,13 +465,23 @@ let rec compile_expr te offset = match te.te_e with
 
 			pushq !%rax ++
 			pushq (lab (label_value_from_gvar var))
-		else
+		else begin
 			failwith "Local variables are not implemented."
-		(* ajoute le décalage de la var offset
-		augmente fpcur
-		mettre fpcur à 0 quand il faut *)
+			(* TODO
+			let ofs = Imap.find var in
+			movq (ind ~ofs:(ofs - 8) rbp) !%rax ++
+			movq (ind ~ofs:(ofs - 16) rbp) !%rbx ++
+
+			(* Verify that the variable is defined. *)
+			cmpq (imm t_undef) !%rbx ++
+			error jz (sprintf "Variable %s undefined." var) ++
+
+			pushq !%rax ++
+			pushq !%rbx
+			*)
+		end
 	| TAffect ({ lvalue_loc = _; lvalue_type = _; lvalue_lvalue = TVar (l, var); }, te1) ->
-		compile_expr te1 offset ++
+		compile_expr te1 ++
 		popq rax ++ (* Value. *)
 		popq rbx ++ (* Type. *)
 		if Env.is_global var !env then
@@ -484,11 +491,12 @@ let rec compile_expr te offset = match te.te_e with
 			pushq !%rax
 		else
 			failwith "Local variables are not implemented."
+
+	(* Control structures. *)
 	| _ -> pushq (imm 0) ++ pushq (imm 0) (* TODO *)
 
-(* TODO offset *)
 let compile_stmt (code_func, code) = function
-	| TExpr texpr -> code_func, code ++ compile_expr texpr Imap.empty
+	| TExpr texpr -> code_func, code ++ compile_expr texpr
 	| TFunc tfunc -> code_func, code (* TODO *)
 
 let gen genv tast ofile =
