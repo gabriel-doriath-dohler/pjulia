@@ -332,6 +332,13 @@ let rec compile_expr env te = match te.te_e with
 				idivq v2 ++
 				movq v1 !%rsi ++
 				set_int
+			| "typeof" ->
+				(* Type check. *)
+				movq (imm nb_args) !%r8 ++
+				cmpq (imm 1) !%r8 ++
+				error jnz "Typeof takes one argument." ++
+				movq (ind ~ofs:0 rdi) !%rsi ++
+				set_int
 			| _ -> call (func_name name) ) ++
 
 		(* Deallocate the arguments. *)
@@ -583,7 +590,7 @@ and compile_expr_list env = function
 let compile_func tf =
 	let nb_lvar = Imap.cardinal tf.tf_env.l in
 	let nb_args = List.length tf.tf_params in
-	Imap.iter (fun name ofs -> Format.printf "@.%s = %d@.@?" name ofs) tf.tf_env.ofs; (* TODO *)
+	(* Imap.iter (fun name ofs -> Format.printf "@.%s = %d@.@?" name ofs) tf.tf_env.ofs; (* TODO *) *)
 	label (func_name (snd tf.tf_name)) ++
 	pushq !%rbp ++
 	movq !%rsp !%rbp ++

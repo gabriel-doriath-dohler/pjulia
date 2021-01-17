@@ -15,8 +15,8 @@ let type1_func f =
 	let func_or_struc = if f.f_is_constructor then "structure" else "function" in
 	let arg_or_field = if f.f_is_constructor then "field" else "argument" in
 
-	(* Verify that the name isn't div, print or println. *)
-	if List.mem name [ "div"; "print"; "println" ] then
+	(* Verify that the name isn't typeof, div, print or println. *)
+	if List.mem name [ "typeof"; "div"; "print"; "println" ] then
 		Typ.type_error
 			(fst f.f_name)
 			(sprintf "A %s can't be named %s." func_or_struc name);
@@ -119,6 +119,14 @@ let type2_div l targs = (match targs with
 			"The function div takes 2 arguments but %d where given." (List.length targs)));
 	[], Typ.Int64
 
+let type2_typeof l targs = (match targs with
+	| [ a; ] -> ()
+	| _			->
+		Typ.type_error l (sprintf
+			"The function typeof takes one argument but %d where given." (List.length targs)));
+	[], Typ.Int64
+
+
 let rec type2_expr env e =
 	let te, typ = match snd e with
 		(* Constants. *)
@@ -133,6 +141,7 @@ let rec type2_expr env e =
 			let f_list, t_ret = (match name with
 				| "div"		-> type2_div l targs
 				| "print"	-> [], Typ.Nothing
+				| "typeof"	-> type2_typeof l targs
 				| _			->
 					let t_list = List.map (fun x -> x.te_type) targs in
 					let f_list = Env.compatible_functions name t_list in
