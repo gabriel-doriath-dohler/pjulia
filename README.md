@@ -92,19 +92,21 @@ assembly from OCaml.
 ### tests/exec-fail/
 - `local.jl`
 ## What has not been done
-- While and for loops
-- Structures
+- While and for loops. (We have a buggy attemp to compile for loops.)
+- Structures : then *should* be easy to add as the value representation is uniform. We would use a map mapping a struct to an int representing its type and an int representing its size.
 - Return
-- Dynamic dyspatch
+- Dynamic dyspatch : it could be implemented using the `typeof` function that we added. The environment already detects all of the possible quanditate functions.
 ## Difficulties encountered
-- It took use some time to properly modify the grammar to avoid conflicts. In particular we use a different idea as last time for the unitary minus.
+- It took use some time to properly modify the grammar to avoid conflicts. In particular we use a different idea as last time for the unitary minus. Instead of separating expression starting with a unitary minus we have separete rules for the conditions.
 - Understanding the scope of variables was challenging. As a result, we had to change the
 typing environment (from/to mutable to/from imutable) a few times.
 - We missunderstood the way that values are represented in pjulia so we had to
 modify most of the compiler at the last minute. We should have read the guidlines more
 carefully.
+
+`ppx_deriving` was very usefull for debugging.
 ## Bonus
-- We have started to create an interpret in order to check the compiler against it.
+- We have started to create an interpret in order to check the compiler against it. At he moment it is still very buggy.
 - We have added some tests (see above).
 - We have added a function `typeof` to get the type of an objet as an int. This
 would have been usefull for the dynamic dispatch.
@@ -115,14 +117,17 @@ modular way.
 We accept any char in a comment (except the newline character).
 ## Parsing
 We parser used to contain bugs. Some are fixed now. It will generate a warning
-`unused var zz`. This is ugly but expected.
+`unused variable zz`. This is ugly but expected.
+## Ast
+The localisation isn't stored is a good way. It is ugly and impressice.
 ## Typing
 We use `src/env.ml` as a typing environment. This makes everything clearer. The
 Typing system has been rewritten fromm the ground up compared to last time. We
 use a reference to modify the behavior of `type1_expr` so it can be used in
 part 2. No structure can be called `typeof`, `div`, `print` or `println`.
 Structures and functions can't have the same name. We use hashtables instead of
-Set as this is faster.
+sets as this is faster. During typing we also gather all of the information needed for allocating variables.
+The environment has some functionnalities to make multi dispatch easier.
 ## pjuliac
 If multiple files are inputed to `pjuliac`, the last one will be the only one
 proceced.
