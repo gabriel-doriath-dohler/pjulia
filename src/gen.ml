@@ -70,7 +70,7 @@ let code_error_n n =
 	label (sprintf ".code_error_%d" n) ++
 
 	(* Restore the original value of %rsp and %rbp *)
-	movq !%r14 !%rbp ++
+	movq !%r12 !%rbp ++
 	movq !%r15 !%rsp ++
 
 	(* Print the error message. *)
@@ -139,6 +139,13 @@ let set_nothing =
 	movq !%rax !%rdi
 
 (* Get. *)
+let get_int reg =
+	assert_is_defined rdi ++
+	movq (ind ~ofs:0 rdi) !%rbx ++
+	cmpq (imm t_int) !%rbx ++
+	error jnz "Type error: the expression should have type int." ++
+	movq (ind ~ofs:8 rdi) reg
+
 let get_bool reg =
 	assert_is_defined rdi ++
 	movq (ind ~ofs:0 rdi) !%rbx ++
@@ -203,17 +210,17 @@ let print =
 	label ".print" ++
 	pushq !%rbp ++
 	movq !%rsp !%rbp ++
-	movq !%rsi !%r12 ++
+	movq !%rsi !%r14 ++
 
 
 	label ".print_loop" ++
-	testq !%r12 !%r12 ++
+	testq !%r14 !%r14 ++
 	jz ".print_end" ++
 
-	movq !%r12 !%r9 ++
-	addq !%r12 !%r9 ++
+	movq !%r14 !%r9 ++
+	addq !%r14 !%r9 ++
 	get_from_pointer (ind ~ofs:8 ~index:r9 ~scale:8 rbp) !%rdi !%rsi ++
-	decq !%r12 ++
+	decq !%r14 ++
 
 	cmpq (imm t_nothing) !%rdi ++
 	jz ".print_nothing" ++
@@ -224,7 +231,7 @@ let print =
 	cmpq (imm t_bool) !%rdi ++
 	jz ".print_bool" ++
 
-	(* jmp ".print_int" ++ (* TODO *) *)
+	(* jmp ".print_int" ++ *)
 	error jmp "Print cannot print this type." ++
 
 	label ".print_end" ++
@@ -533,33 +540,8 @@ let rec compile_expr env te = match te.te_e with
 			movq !%rdx (lab (label_type_from_gvar var))
 		else
 			let ofs = Env.offset_of var env in
-			(* If undef. *)
 			set rdx rcx ++
-			movq !%rdi (ind ~ofs:ofs rbp)
-			(* If def. *)
-			(* TODO *) )
-
-(*
-			movq (ind ~ofs:ofs rbp) rcx ++
-			movq !%rax (ind ~ofs:8 rcx) ++
-			movq !%rbx (ind ~ofs:0 rcx) ++
-			movq (ind ~ofs:0 rcx) !%rdx ++
-			movq !%rdx (ind ~ofs:ofs rbp)) (* TODO *)
-
-get_from_pointer (ind ~ofs:8 ~index:r9 ~scale:8 rbp) !%rdi !%rsi ++
-let get_from_pointer pointer reg_type reg_value =
-	movq pointer !%r8 ++
-	assert_is_defined r8 ++
-	movq (ind ~ofs:8 r8) reg_value ++
-	movq (ind ~ofs:0 r8) reg_type
-
-let get reg_type reg_value =
-	assert_is_defined rdi ++
-	movq (ind ~ofs:8 rdi) reg_value ++
-	movq (ind ~ofs:0 rdi) reg_type
-*)
-
-
+			movq !%rdi (ind ~ofs:ofs rbp))
 
 	(* Control structures. *)
 	| TIf (cond, tb, teb) ->
@@ -578,6 +560,93 @@ let get reg_type reg_value =
 		compile_bloc env teb ++
 
 		label if_end
+	| TFor tfor ->
+		let (_, idx), inf, sup, tb = tfor.for_expr in
+		let ofs = Env.offset_of idx tfor.for_env in
+		let for_end = distinct_label "for_end" in
+		let for_loop = distinct_label "for_loop" in
+		Imap.iter (fun name ofs -> Format.printf "@.%s: %s = %d@.@?" idx name ofs) tfor.for_env.ofs; (* TODO *)
+		(* Keep r13. *)
+		pushq !%r13 ++
+		pushq !%r13 ++
+
+		(* Lower bound. *)
+		compile_expr env inf ++
+
+		(* Init index. *)
+		movq !%rdi (ind ~ofs:ofs rbp) ++
+
+		(* Upper bound. *)
+		compile_expr env sup ++
+
+		get_int !%r13 ++
+		(* For loop logic. *)
+		label for_loop ++
+		movq (ind ~ofs:ofs rbp) !%rdi ++
+		get_int !%r11 ++
+		cmpq !%r11 !%r13 ++
+		jl for_end ++
+
+		(* Keep r11. *)
+		pushq !%r11 ++
+		pushq !%r11 ++
+		compile_bloc tfor.for_env tb ++
+		(* Restore r11. *)
+		popq r11 ++
+		popq r11 ++
+
+		incq !%r11 ++
+		movq !%r11 !%rsi ++
+		set_int ++
+		movq !%rdi (ind ~ofs:ofs rbp) ++
+
+		jmp for_loop ++
+		label for_end ++
+		(* Restore r13. *)
+		popq r13 ++
+		popq r13 ++
+		set_nothing
+
+
+		(*
+		let _, inf, sup, tb = tfor.for_expr in
+		let nb_lvar = (Imap.cardinal tfor.for_env.l) - 1 in
+		let for_end = distinct_label "for_end" in
+		let for_loop = distinct_label "for_loop" in
+		pushq !%r13 ++
+		pushq !%r12 ++
+		compile_expr env inf ++
+		get_int !%r13 ++
+
+		compile_expr env sup ++
+		get_int !%r12 ++
+
+		pushq !%rbp ++
+		pushq !%rbp ++
+		movq !rsp !rbp ++
+		(* Allocate the local variables. *)
+		pushn nb_lvar ++
+
+		(* For loop logic. *)
+		label for_loop ++
+		cmpq !%r13 !%r12 ++
+		jl for_end ++
+		incrq !%r13 ++
+
+		(* Compile the body. *)
+		compile_bloc tfor.for_env tb ++
+		jmp for_loop ++
+
+		label for_end ++
+		(* Deallocate the local variables. *)
+		popn (16 * nb_lvar) ++
+		popq rbp ++
+		leave ++
+		(* Deallocate the arguments. *)
+		popn (16 * 2) ++
+		popq r12 ++
+		popq r13 ++
+		set_nothing *)
 	| _ -> failwith "Not implemented."
 
 and compile_bloc env tb = compile_expr_list env tb.block_b
@@ -590,7 +659,7 @@ and compile_expr_list env = function
 let compile_func tf =
 	let nb_lvar = Imap.cardinal tf.tf_env.l in
 	let nb_args = List.length tf.tf_params in
-	(* Imap.iter (fun name ofs -> Format.printf "@.%s = %d@.@?" name ofs) tf.tf_env.ofs; (* TODO *) *)
+	Imap.iter (fun name ofs -> Format.printf "@.%s = %d@.@?" name ofs) tf.tf_env.ofs; (* TODO *)
 	label (func_name (snd tf.tf_name)) ++
 	pushq !%rbp ++
 	movq !%rsp !%rbp ++
@@ -639,9 +708,8 @@ let gen genv tast ofile =
 	let p =
 		{ text =
 			globl "main" ++ label "main" ++
-			(* Keep %rbp in %r14 for error handeling. *)
-			movq !%rbp !%r14 ++
-			(* Keep %rsp in %r15 for error handeling. *)
+			(* Keep rbp in r12 and rsp in r15 for error handeling. *)
+			movq !%rbp !%r12 ++
 			movq !%rsp !%r15 ++
 			movq !%rsp !%rbp ++
 
@@ -651,12 +719,18 @@ let gen genv tast ofile =
 			movq !%rax (lab (label_value_from_gvar "nothing")) ++
 			movq !%rbx (lab (label_type_from_gvar "nothing")) ++
 
+			(* Alloc. *)
+			pushn 2 ++ (* TODO *)
+			pushq !%rbp ++
+			pushq !%rbp ++
+			movq !%rsp !%rbp ++
+
 			comment "Code of the program." ++
 			code ++
 
 			comment "Exit 0." ++
 			(* Restore the original value of %rsp and %rbp *)
-			movq !%r14 !%rbp ++
+			movq !%r12 !%rbp ++
 			movq !%r15 !%rsp ++
 
 			(* Exit with code 0. *)
