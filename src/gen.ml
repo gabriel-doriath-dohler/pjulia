@@ -336,24 +336,17 @@ let rec compile_expr te = match te.te_e with
 
 		xorq (imm 1) !%rsi ++
 		set_bool
-	(* TODO *) (*
 	| TBinop (te1, Or, te2) ->
 		(* Lazy evaluation. *)
 		let v1 = !%rax in
-		let t1 = !%rbx in
-		let v2 = !%rcx in
-		let t2 = !%rdx in
+		let v2 = !%rbx in
 		let or_true = distinct_label ".or_true" in
 		let or_end = distinct_label ".or_end" in
-
 		(* Evaluate te1. *)
 		compile_expr te1 ++
-		xorq !%r8 !%r8 ++
-		popq rax ++ (* Value 1. *)
-		popq rbx ++ (* Type 1. *)
-		(* Type check te1. *)
-		cmpq (imm t_bool) t1 ++
-		error jnz "Type error: Or takes a bool as a first argument." ++
+		get_bool v1 ++
+
+		xorq !%rsi !%rsi ++
 
 		(* Test if v1 is true. *)
 		testq v1 v1 ++
@@ -361,40 +354,31 @@ let rec compile_expr te = match te.te_e with
 
 		(* Evaluate te2. *)
 		compile_expr te2 ++
-		xorq !%r8 !%r8 ++
-		popq rcx ++ (* Value 2. *)
-		popq rdx ++ (* Type 2. *)
-		(* Type check te2. *)
-		cmpq (imm t_bool) t2 ++
-		error jnz "Type error: Or takes a bool as a second argument." ++
+		get_bool v2 ++
+
+		xorq !%rsi !%rsi ++
 
 		(* Test if v2 is false. *)
 		testq v2 v2 ++
 		jz or_end ++
 
 		label or_true ++
-		movq (imm 1) !%r8 ++
+		movq (imm 1) !%rsi ++
 
 		label or_end ++
-		pushq (imm t_bool) ++
-		pushq !%r8
+		set_bool
 	| TBinop (te1, And, te2) ->
 		(* Lazy evaluation. *)
 		let v1 = !%rax in
-		let t1 = !%rbx in
-		let v2 = !%rcx in
-		let t2 = !%rdx in
+		let v2 = !%rbx in
 		let and_false = distinct_label ".and_false" in
 		let and_end = distinct_label ".and_end" in
 
 		(* Evaluate te1. *)
 		compile_expr te1 ++
-		movq (imm 1) !%r8 ++
-		popq rax ++ (* Value 1. *)
-		popq rbx ++ (* Type 1. *)
-		(* Type check te1. *)
-		cmpq (imm t_bool) t1 ++
-		error jnz "Type error: And takes a bool as a first argument." ++
+		get_bool v1 ++
+
+		movq (imm 1) !%rsi ++
 
 		(* Test if v1 is false. *)
 		testq v1 v1 ++
@@ -402,23 +386,19 @@ let rec compile_expr te = match te.te_e with
 
 		(* Evaluate te2. *)
 		compile_expr te2 ++
-		movq (imm 1) !%r8 ++
-		popq rcx ++ (* Value 2. *)
-		popq rdx ++ (* Type 2. *)
-		(* Type check te2. *)
-		cmpq (imm t_bool) t2 ++
-		error jnz "Type error: And takes a bool as a second argument." ++
+		get_bool v2 ++
+
+		movq (imm 1) !%rsi ++
 
 		(* Test if v2 is true. *)
 		testq v2 v2 ++
 		jnz and_end ++
 
 		label and_false ++
-		xorq !%r8 !%r8 ++
+		xorq !%rsi !%rsi ++
 
 		label and_end ++
-		pushq (imm t_bool) ++
-		pushq !%r8 *)
+		set_bool
 	| TBinop (te1, op, te2) ->
 		let v1 = !%rax in
 		let t1 = !%rbx in
@@ -509,7 +489,7 @@ let rec compile_expr te = match te.te_e with
 				cmpq v2 v1 ++
 				setge !%r8b) ++
 
-		(* Save the result. TODO *)
+		(* Save the result. *)
 		(match op with
 			| Add | Sub | Mul -> movq v1 !%rsi ++ set_int
 			| And | Or -> failwith "And and Or are compiled separately."
