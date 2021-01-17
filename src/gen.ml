@@ -218,7 +218,6 @@ let print =
 	leave ++
 	ret
 
-(* TODO
 (* stdlib *)
 let pow =
 	(* rdx <- rax^rcx
@@ -256,11 +255,10 @@ let pow =
 	label ".pow_end" ++
 	imulq !%rbx !%rdx ++
 	ret
-*)
 
 let code_stdlib =
-	print ++ print_nothing ++ print_int ++ print_str ++ print_bool (* ++ TODO
-	pow *)
+	print ++ print_nothing ++ print_int ++ print_str ++ print_bool ++
+	pow
 
 let data_stdlib =
 	(* Data for the print functions. *)
@@ -477,7 +475,7 @@ let rec compile_expr te = match te.te_e with
 				error jz "Division by zero." ++
 				cqto ++
 				idivq v2
-			| Pow	-> failwith "Pow not implemented" (* call ".pow" TODO *)
+			| Pow	-> call ".pow"
 			| And | Or -> failwith "And and Or are compiled separately."
 			| Eq	->
 				xorq !%r9 !%r9 ++
