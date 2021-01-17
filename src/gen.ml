@@ -90,16 +90,16 @@ let assert_is_defined addr =
 	testq (imm 1) !%addr ++
 	error jnz "Variable undefined."
 
-(* Set rdi.*)
-let set_int reg =
+(* Set rdi with rsi.*)
+let set_int =
 	movq (imm 16) !%rdi ++
-	pushq !%reg ++
-	pushq !%rbx ++ (* Align. *)
+	pushq !%rsi ++
+	pushq !%rsi ++
 	call "malloc" ++
-	popq rbx ++ (* Align. *)
-	popq reg ++
+	popq rsi ++
+	popq rsi ++
 	movq (imm t_int) (ind ~ofs:0 rax) ++
-	movq !%reg (ind ~ofs:(8) rax) ++
+	movq !%rsi (ind ~ofs:(8) rax) ++
 	movq !%rax !%rdi
 
 let set_str s =
@@ -109,15 +109,15 @@ let set_str s =
 	movq (ilab (distinct_string s)) (ind ~ofs:8 rax) ++
 	movq !%rax !%rdi
 
-let set_bool reg =
+let set_bool =
 	movq (imm 16) !%rdi ++
-	pushq !%reg ++
-	pushq !%rbx ++ (* Align. *)
+	pushq !%rsi ++
+	pushq !%rsi ++
 	call "malloc" ++
-	popq rbx ++ (* Align. *)
-	popq reg ++
+	popq rsi ++
+	popq rsi ++
 	movq (imm t_bool) (ind ~ofs:0 rax) ++
-	movq !%reg (ind ~ofs:8 rax) ++
+	movq !%rsi (ind ~ofs:8 rax) ++
 	movq !%rax !%rdi
 
 let set_nothing =
@@ -141,6 +141,7 @@ let get_from_pointer pointer reg_type reg_value =
 	movq (ind ~ofs:0 rbx) reg_type
 
 let get reg_type reg_value =
+	assert_is_defined rdi ++
 	movq (ind ~ofs:8 rdi) reg_value ++
 	movq (ind ~ofs:0 rdi) reg_type
 
@@ -280,9 +281,9 @@ let label_value_from_gvar var =
 (* TODO env *)
 let rec compile_expr te = match te.te_e with
 	(* Constants. *)
-	| TInt n	-> movq (imm64 n) !%rsi ++ set_int rsi
+	| TInt n	-> movq (imm64 n) !%rsi ++ set_int
 	| TStr s	-> set_str s
-	| TBool b	-> movq (imm (if b then 1 else 0)) !%rsi ++ set_bool rsi
+	| TBool b	-> movq (imm (if b then 1 else 0)) !%rsi ++ set_bool
 
 	(* Expressions with parentheses. *)
 	| TPar tb -> compile_bloc tb
@@ -333,10 +334,10 @@ let rec compile_expr te = match te.te_e with
 	(* Operations. *)
 	| TNot te	->
 		compile_expr te ++
-		get_bool !%rbx ++
+		get_bool !%rsi ++
 
-		xorq (imm 1) !%rbx ++
-		set_bool rbx
+		xorq (imm 1) !%rsi ++
+		set_bool
 	(* TODO *) (*
 	| TBinop (te1, Or, te2) ->
 		(* Lazy evaluation. *)
@@ -420,19 +421,20 @@ let rec compile_expr te = match te.te_e with
 		label and_end ++
 		pushq (imm t_bool) ++
 		pushq !%r8 *)
-	| TBinop (te1, op, te2) -> failwith "Binops are not implemented." (*
+	| TBinop (te1, op, te2) ->
 		let v1 = !%rax in
 		let t1 = !%rbx in
 		let v2 = !%rcx in
 		let t2 = !%rdx in
 		compile_expr te1 ++
+		get t1 v1 ++
+		pushq t1 ++
+		pushq v1 ++
+
 		compile_expr te2 ++
-
-		popq rcx ++ (* Value 2. *)
-		popq rdx ++ (* Type 2. *)
-
-		popq rax ++ (* Value 1. *)
-		popq rbx ++ (* Type 1. *)
+		get t2 v2 ++
+		popq rax ++
+		popq rbx ++
 
 		(* Type check. *)
 		(match op with
@@ -450,7 +452,7 @@ let rec compile_expr te = match te.te_e with
 				cmovzq !%r8 t1 ++
 				cmpq (imm t_bool) t2 ++
 				cmovzq !%r8 t2
-			| L | Leq | G | Geq ->
+			| L | Leq | G | Geq -> (* TODO idée Samuel *)
 				let cmp_arg1_type_ok = distinct_label ".cmp_arg1_type_ok" in
 				let cmp_arg2_type_ok = distinct_label ".cmp_arg2_type_ok" in
 				cmpq (imm t_bool) t1 ++
@@ -475,7 +477,7 @@ let rec compile_expr te = match te.te_e with
 				error jz "Division by zero." ++
 				cqto ++
 				idivq v2
-			| Pow	-> call ".pow"
+			| Pow	-> failwith "Pow not implemented" (* call ".pow" TODO *)
 			| And | Or -> failwith "And and Or are compiled separately."
 			| Eq	->
 				xorq !%r9 !%r9 ++
@@ -509,12 +511,12 @@ let rec compile_expr te = match te.te_e with
 				cmpq v2 v1 ++
 				setge !%r8b) ++
 
-		(* Push the result. *)
+		(* Save the result. TODO *)
 		(match op with
-			| Add | Sub | Mul -> pushq t1 ++ pushq v1
+			| Add | Sub | Mul -> movq v1 !%rsi ++ set_int
 			| And | Or -> failwith "And and Or are compiled separately."
-			| Mod | Pow -> pushq (imm t_int) ++ pushq !%rdx
-			| Eq | Neq | L | Leq | G | Geq  -> pushq (imm t_bool) ++ pushq !%r8) *)
+			| Mod | Pow -> movq !%rdx !%rsi ++ set_int
+			| Eq | Neq | L | Leq | G | Geq  -> movq !%r8 !%rsi ++ set_bool)
 
 	| TLval { lvalue_loc = _; lvalue_type = _; lvalue_lvalue = TVar (l, var); } -> failwith "Lval not implemented"
 		(*
