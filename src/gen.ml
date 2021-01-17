@@ -136,9 +136,9 @@ let get_bool reg =
 	movq (ind ~ofs:8 rdi) reg
 
 let get_from_pointer pointer reg_type reg_value =
-	movq pointer !%rbx ++
-	movq (ind ~ofs:8 rbx) reg_value ++
-	movq (ind ~ofs:0 rbx) reg_type
+	movq pointer !%r8 ++
+	movq (ind ~ofs:8 r8) reg_value ++
+	movq (ind ~ofs:0 r8) reg_type
 
 let get reg_type reg_value =
 	assert_is_defined rdi ++
@@ -297,21 +297,17 @@ let rec compile_expr te = match te.te_e with
 				movq (imm nb_args) !%rsi ++
 				call ".print" ++
 				set_nothing
-			| "div" -> failwith "Div not implemented"
-				(* TODO
+			| "div" ->
 				let v1 = !%rax in
 				let t1 = !%rbx in
 				let v2 = !%rcx in
 				let t2 = !%rdx in
+				get_from_pointer (ind ~ofs:8 rsp) t2 v2 ++
+				get_from_pointer (ind ~ofs:24 rsp) t1 v1 ++
 				(* Type check. *)
 				movq (imm nb_args) !%r8 ++
 				cmpq (imm 2) !%r8 ++
 				error jnz "Div takes two arguments." ++
-
-				popq rax ++ (* Value 1. *)
-				popq rbx ++ (* Type 1. *)
-				popq rcx ++ (* Value 2. *)
-				popq rdx ++ (* Type 2. *)
 
 				cmpq (imm t_int) t1 ++
 				error jnz "Type error: Div's first argument should be an int." ++
@@ -322,8 +318,8 @@ let rec compile_expr te = match te.te_e with
 				(* Divide. *)
 				cqto ++
 				idivq v2 ++
-				pushq (imm t_int) ++
-				pushq v1 *)
+				movq v1 !%rsi ++
+				set_int
 			| _ -> call (func_name name) ) ++
 
 		(* Deallocate the arguments. *)
