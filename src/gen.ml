@@ -527,18 +527,14 @@ let rec compile_expr env te = match te.te_e with
 			pushq !%rbx
 			*)
 		end
-	| TAffect ({ lvalue_loc = _; lvalue_type = _; lvalue_lvalue = TVar (l, var); }, te1) -> failwith "Affect not implemented"
-		(*
+	| TAffect ({ lvalue_loc = _; lvalue_type = _; lvalue_lvalue = TVar (l, var); }, te1) ->
 		compile_expr env te1 ++
-		popq rax ++ (* Value. *)
-		popq rbx ++ (* Type. *)
-		if Env.is_global var !env then
+		get !%rbx !%rax ++
+		(if Env.is_global var env then
 			movq !%rax (lab (label_value_from_gvar var)) ++
-			movq !%rbx (lab (label_type_from_gvar var)) ++
-			pushq !%rbx ++
-			pushq !%rax
+			movq !%rbx (lab (label_type_from_gvar var))
 		else
-			failwith "Local variables are not implemented." *)
+			failwith "Local variables are not implemented.")
 
 	(* Control structures. *)
 	| TIf (cond, tb, teb) ->
