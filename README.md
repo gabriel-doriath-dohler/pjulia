@@ -91,3 +91,49 @@ assembly from OCaml.
 - `z.jl`
 ### tests/exec-fail/
 - `local.jl`
+## What has not been done
+- While and for loops
+- Structures
+- Return
+- Dynamic dyspatch
+## Difficulties encountered
+- It took use some time to properly modify the grammar to avoid conflicts. In particular we use a different idea as last time for the unitary minus.
+- Understanding the scope of variables was challenging. As a result, we had to change the
+typing environment (from/to mutable to/from imutable) a few times.
+- We missunderstood the way that values are represented in pjulia so we had to
+modify most of the compiler at the last minute. We should have read the guidlines more
+carefully.
+## Bonus
+- We have started to create an interpret in order to check the compiler against it.
+- We have added some tests (see above).
+- We have added a function `typeof` to get the type of an objet as an int. This
+would have been usefull for the dynamic dispatch.
+- We have tried to provide good error messages during execution. And do so in a
+modular way.
+- We have coded an iterative fast expodentiation.
+## Lexing
+We accept any char in a comment (except the newline character).
+## Parsing
+We parser used to contain bugs. Some are fixed now. It will generate a warning
+`unused var zz`. This is ugly but expected.
+## Typing
+We use `src/env.ml` as a typing environment. This makes everything clearer. The
+Typing system has been rewritten fromm the ground up compared to last time. We
+use a reference to modify the behavior of `type1_expr` so it can be used in
+part 2. No structure can be called `typeof`, `div`, `print` or `println`.
+Structures and functions can't have the same name. We use hashtables instead of
+Set as this is faster.
+## pjuliac
+If multiple files are inputed to `pjuliac`, the last one will be the only one
+proceced.
+## X86-64
+We have added conditional moves.
+## Code generation
+We mostly produce non factorised code. This is a bit easier and faster if the
+code still fits in the cache.
+
+We interpret `a == b == c` as `(a == b) == c`. We behavior of `return` outside
+a function is unspecified.
+## Conclusion
+We are a bit sad that we did not finish the project in time but we still
+learned a lot and had fun.
