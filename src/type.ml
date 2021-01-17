@@ -280,7 +280,8 @@ let type2_func env f =
 	(* Function. *)
 	else begin
 		let env_param = List.fold_left
-			(fun e -> fun p -> Env.add_local_variable (snd p.p_name) p.p_type e) env f.f_params in
+			(fun e -> fun p -> Env.add_local_variable ~param:true (snd p.p_name) p.p_type e)
+			env (List.rev f.f_params) in
 		let lenv = type1_block env_param f.f_body in
 		let tb = type2_block lenv f.f_body in
 		Typ.assert_compatible f.f_loc tb.block_type f.f_type; (* TODO loc *)

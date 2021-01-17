@@ -127,6 +127,8 @@ let () =
 			(* TODO localisation *)
 			Format.eprintf "Interpretation error: %s@.@?" s;
 			exit 1
+		(* TODO
 		| _						->
 			Format.eprintf "Unexpected error of the compiler.@.@?";
 			exit 2
+		*)

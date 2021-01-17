@@ -2,7 +2,7 @@ open Format
 open Ast
 
 module Imap = Map.Make(String)
-type env = { g : Typ.t Imap.t; l : Typ.t Imap.t; mutable ofs : int Imap.t; }
+type env = { g : Typ.t Imap.t; l : Typ.t Imap.t; ofs : int Imap.t; next_ofs_arg : int; next_ofs_var : int; }
 
 type texpr =
 	{ te_loc : loc;

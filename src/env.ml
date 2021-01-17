@@ -6,7 +6,7 @@ open Tast
 let genv = Imap.singleton "nothing" Typ.Nothing
 let lenv = Imap.empty
 
-let empty_env = { g = genv; l = lenv; ofs = Imap.empty }
+let empty_env = { g = genv; l = lenv; ofs = Imap.empty; next_ofs_arg = 24; next_ofs_var = -8; }
 
 (* Set of declared types. *)
 let declared_types:((Typ.t, unit) Hashtbl.t) = Hashtbl.create 16
@@ -25,17 +25,24 @@ let h_type_of_field:((string, Typ.t) Hashtbl.t) = Hashtbl.create 16
 (* Helper functions. *)
 
 (* For variables. *)
-let add_local_variable name typ env =
-	{ env with l = Imap.add name typ env.l }
-
-let add_global_variable name typ env =
-	{ env with g = Imap.add name typ env.g }
-
 let is_local name env =
 	Imap.mem name env.l
 
 let is_global name env =
 	not (is_local name env) && Imap.mem name env.g
+
+let add_local_variable ?(param=false) name typ env =
+	if not (is_local name env) then
+		let next_ofs = if param then env.next_ofs_arg else env.next_ofs_var in
+		{ g = env.g;
+		l = Imap.add name typ env.l;
+		ofs = Imap.add name next_ofs env.ofs;
+		next_ofs_arg = env.next_ofs_arg + if param then 16 else 0;
+		next_ofs_var = env.next_ofs_var - if param then 0 else 16; }
+	else env
+
+let add_global_variable name typ env =
+	{ env with g = Imap.add name typ env.g }
 
 let type_of name env =
 	try Imap.find name env.l
@@ -53,6 +60,9 @@ let assert_variable_defined l name env =
 
 let is_offset_defined var env =
 	Imap.mem var env.ofs
+
+let offset_of var env =
+	Imap.find var env.ofs
 
 (* For types. *)
 let declare_type typ =
@@ -80,12 +90,6 @@ let compatible_functions name t_list =
 		(fun (arguments_type, return_type, _) -> (arguments_type, return_type))
 		(Hashtbl.find_all func name) in
 	List.filter (is_function_compatible t_list) f_list
-
-let func_add_ofs tf var var_ofs =
-	tf.tf_env.ofs <- Imap.add var var_ofs tf.tf_env.ofs
-
-let func_set_fpmax tf fpmax=
-	tf.tf_fpmax <- fpmax
 
 (* For fields. *)
 let is_field_defined field_name =

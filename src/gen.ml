@@ -148,6 +148,7 @@ let get_bool reg =
 
 let get_from_pointer pointer reg_type reg_value =
 	movq pointer !%r8 ++
+	assert_is_defined r8 ++
 	movq (ind ~ofs:8 r8) reg_value ++
 	movq (ind ~ofs:0 r8) reg_type
 
@@ -223,6 +224,7 @@ let print =
 	cmpq (imm t_bool) !%rdi ++
 	jz ".print_bool" ++
 
+	(* jmp ".print_int" ++ (* TODO *) *)
 	error jmp "Print cannot print this type." ++
 
 	label ".print_end" ++
@@ -287,7 +289,6 @@ let label_value_from_gvar var =
 
 (* Compilation. *)
 
-(* TODO env *)
 let rec compile_expr env te = match te.te_e with
 	(* Constants. *)
 	| TInt n	-> movq (imm64 n) !%rsi ++ set_int
@@ -437,7 +438,7 @@ let rec compile_expr env te = match te.te_e with
 				cmovzq !%r8 t1 ++
 				cmpq (imm t_bool) t2 ++
 				cmovzq !%r8 t2
-			| L | Leq | G | Geq -> (* TODO idée Samuel *)
+			| L | Leq | G | Geq ->
 				let cmp_arg1_type_ok = distinct_label ".cmp_arg1_type_ok" in
 				let cmp_arg2_type_ok = distinct_label ".cmp_arg2_type_ok" in
 				cmpq (imm t_bool) t1 ++
@@ -513,28 +514,45 @@ let rec compile_expr env te = match te.te_e with
 
 			set rbx rcx
 		else begin
-			failwith "Local variables are not implemented."
-			(* TODO
-			let ofs = Imap.find var in
-			movq (ind ~ofs:(ofs - 8) rbp) !%rax ++
-			movq (ind ~ofs:(ofs - 16) rbp) !%rbx ++
-
-			(* Verify that the variable is defined. *)
-			cmpq (imm t_undef) !%rbx ++
-			error jz (sprintf "Variable %s undefined." var) ++
-
-			pushq !%rax ++
-			pushq !%rbx
-			*)
+			let ofs = Env.offset_of var env in
+			get_from_pointer (ind ~ofs:ofs rbp) !%rbx !%rcx ++
+			set rbx rcx
 		end
 	| TAffect ({ lvalue_loc = _; lvalue_type = _; lvalue_lvalue = TVar (l, var); }, te1) ->
 		compile_expr env te1 ++
-		get !%rbx !%rax ++
+		get !%rdx !%rcx ++
 		(if Env.is_global var env then
-			movq !%rax (lab (label_value_from_gvar var)) ++
-			movq !%rbx (lab (label_type_from_gvar var))
+			movq !%rcx (lab (label_value_from_gvar var)) ++
+			movq !%rdx (lab (label_type_from_gvar var))
 		else
-			failwith "Local variables are not implemented.")
+			let ofs = Env.offset_of var env in
+			(* If undef. *)
+			set rdx rcx ++
+			movq !%rdi (ind ~ofs:ofs rbp)
+			(* If def. *)
+			(* TODO *) )
+
+(*
+			movq (ind ~ofs:ofs rbp) rcx ++
+			movq !%rax (ind ~ofs:8 rcx) ++
+			movq !%rbx (ind ~ofs:0 rcx) ++
+			movq (ind ~ofs:0 rcx) !%rdx ++
+			movq !%rdx (ind ~ofs:ofs rbp)) (* TODO *)
+
+get_from_pointer (ind ~ofs:8 ~index:r9 ~scale:8 rbp) !%rdi !%rsi ++
+let get_from_pointer pointer reg_type reg_value =
+	movq pointer !%r8 ++
+	assert_is_defined r8 ++
+	movq (ind ~ofs:8 r8) reg_value ++
+	movq (ind ~ofs:0 r8) reg_type
+
+let get reg_type reg_value =
+	assert_is_defined rdi ++
+	movq (ind ~ofs:8 rdi) reg_value ++
+	movq (ind ~ofs:0 rdi) reg_type
+*)
+
+
 
 	(* Control structures. *)
 	| TIf (cond, tb, teb) ->
@@ -557,32 +575,27 @@ let rec compile_expr env te = match te.te_e with
 
 and compile_bloc env tb = compile_expr_list env tb.block_b
 
-(* TODO *)
 and compile_expr_list env = function
 	| []		-> set_nothing
 	| [te]		-> compile_expr env te
 	| te :: tb	-> compile_expr env te ++ compile_expr_list env tb
 
-let compile_func tf = failwith "Functions not implemented." (*
+let compile_func tf =
 	let nb_lvar = Imap.cardinal tf.tf_env.l in
-	label (func_name (snd tf.tf_name))
+	let nb_args = List.length tf.tf_params in
+	Imap.iter (fun name ofs -> Format.printf "@.%s = %d@.@?" name ofs) tf.tf_env.ofs; (* TODO *)
+	label (func_name (snd tf.tf_name)) ++
 	pushq !%rbp ++
 	movq !%rsp !%rbp ++
 	(* Allocate the local variables. *)
-	pushn nb_lvar ++
-	(* Align. *)
-	(if (nb_lvar + 1) mod 2 = 1 then pushq !%rbx
-	else nop) ++
+	pushn (nb_lvar - nb_args) ++
 	(* Compile the body. *)
-	compile_bloc tf.tf_body ++
-	(* Align. *)
-	(if (nb_lvar + 1) mod 2 = 1 then popq !%rbx
-	else nop) ++
+	compile_bloc tf.tf_env tf.tf_body ++
 	(* Deallocate the local variables. *)
-	popn nb_lvar ++
+	popn (16 * (nb_lvar - nb_args)) ++
 	(* Return. *)
 	leave ++
-	ret *)
+	ret
 
 let compile_stmt env (code_func, code) = function
 	| TExpr texpr -> code_func, code ++ compile_expr env texpr

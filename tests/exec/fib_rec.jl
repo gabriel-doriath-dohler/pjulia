@@ -11,7 +11,7 @@ function fib(n::Int64)
 	end
 end
 
-println(fib(42))
+println(fib(10))
 
 
 
