@@ -12,7 +12,7 @@ let popn n =
 	else addq (imm n) !%rsp
 
 let pushn n =
-	repeat n (pushq (imm 11))
+	repeat n (pushq (imm 1) ++ pushq (imm 1))
 
 let func_name name = sprintf "func_%s" name
 
@@ -90,49 +90,59 @@ let assert_is_defined addr =
 	testq (imm 1) !%addr ++
 	error jnz "Variable undefined."
 
-(* Set rax.*)
-(* TODO align. *)
+(* Set rdi.*)
 let set_int reg =
 	movq (imm 16) !%rdi ++
 	pushq !%reg ++
+	pushq !%rbx ++ (* Align. *)
 	call "malloc" ++
+	popq rbx ++ (* Align. *)
 	popq reg ++
 	movq (imm t_int) (ind ~ofs:0 rax) ++
-	movq !%reg (ind ~ofs:(8) rax)
+	movq !%reg (ind ~ofs:(8) rax) ++
+	movq !%rax !%rdi
 
 let set_str s =
 	movq (imm 16) !%rdi ++
 	call "malloc" ++
 	movq (imm t_str) (ind ~ofs:0 rax) ++
-	movq (ilab (distinct_string s)) (ind ~ofs:8 rax)
+	movq (ilab (distinct_string s)) (ind ~ofs:8 rax) ++
+	movq !%rax !%rdi
 
 let set_bool reg =
 	movq (imm 16) !%rdi ++
 	pushq !%reg ++
+	pushq !%rbx ++ (* Align. *)
 	call "malloc" ++
+	popq rbx ++ (* Align. *)
 	popq reg ++
 	movq (imm t_bool) (ind ~ofs:0 rax) ++
-	movq !%reg (ind ~ofs:8 rax)
+	movq !%reg (ind ~ofs:8 rax) ++
+	movq !%rax !%rdi
 
 let set_nothing =
-	movq (imm 8) !%rdi ++
+	movq (imm 16) !%rdi ++
 	call "malloc" ++
-	movq (imm t_nothing) (ind ~ofs:0 rax)
+	movq (imm t_nothing) (ind ~ofs:0 rax) ++
+	movq (imm 0) (ind ~ofs:8 rax) ++
+	movq !%rax !%rdi
 
 (* Get. *)
-(* TODO *)
-let get_bool (addr:'a X86_64.register) reg =
-	assert_is_defined addr ++
-	movq (ind ~ofs:0 addr) !%rbx ++
+let get_bool reg =
+	assert_is_defined rdi ++
+	movq (ind ~ofs:0 rdi) !%rbx ++
 	cmpq (imm t_bool) !%rbx ++
 	error jnz "Type error: the expression should have type bool." ++
-	movq (ind ~ofs:8 addr) reg
+	movq (ind ~ofs:8 rdi) reg
 
-let get pointer reg_type reg_value =
-	(* TODO struct. *)
+let get_from_pointer pointer reg_type reg_value =
 	movq pointer !%rbx ++
 	movq (ind ~ofs:8 rbx) reg_value ++
 	movq (ind ~ofs:0 rbx) reg_type
+
+let get reg_type reg_value =
+	movq (ind ~ofs:8 rdi) reg_value ++
+	movq (ind ~ofs:0 rdi) reg_type
 
 (* Implementation of print. *)
 let printf s =
@@ -176,18 +186,20 @@ let print_bool =
 	jmp ".print_loop"
 
 let print =
-	(* TODO Align. *)
 	(* rsi = numbers of arguments to print. *)
 	label ".print" ++
 	pushq !%rbp ++
 	movq !%rsp !%rbp ++
 	movq !%rsi !%r12 ++
 
+
 	label ".print_loop" ++
 	testq !%r12 !%r12 ++
 	jz ".print_end" ++
 
-	get (ind ~ofs:8 ~index:r12 ~scale:8 rbp) !%rdi !%rsi ++
+	movq !%r12 !%r9 ++
+	addq !%r12 !%r9 ++
+	get_from_pointer (ind ~ofs:8 ~index:r9 ~scale:8 rbp) !%rdi !%rsi ++
 	decq !%r12 ++
 
 	cmpq (imm t_nothing) !%rdi ++
@@ -264,7 +276,6 @@ let label_value_from_gvar var =
 	sprintf "gvar_value_%s" var
 
 (* Compilation. *)
-(* let env = ref Env.empty_env (* update when changes env. *) *)
 
 (* TODO env *)
 let rec compile_expr te = match te.te_e with
@@ -274,13 +285,12 @@ let rec compile_expr te = match te.te_e with
 	| TBool b	-> movq (imm (if b then 1 else 0)) !%rsi ++ set_bool rsi
 
 	(* Expressions with parentheses. *)
-	| TPar tb ->
-		compile_bloc tb
+	| TPar tb -> compile_bloc tb
 	| TCall ((_, name), args, f_list) ->
 		let nb_args = List.length args in
 
 		(* Compile the arguments and put them on the stack. *)
-		List.fold_left (fun code arg -> code ++ compile_expr arg ++ pushq !%rax) nop args ++
+		List.fold_left (fun code arg -> code ++ compile_expr arg ++ pushq !%rdi ++ pushq (imm 1)) nop args ++
 
 		(* Compile the body of the function. *)
 		(match name with
@@ -288,7 +298,7 @@ let rec compile_expr te = match te.te_e with
 				movq (imm nb_args) !%rsi ++
 				call ".print" ++
 				set_nothing
-			| "div" -> failwith "Div not imleplemented"
+			| "div" -> failwith "Div not implemented"
 				(* TODO
 				let v1 = !%rax in
 				let t1 = !%rbx in
@@ -318,28 +328,15 @@ let rec compile_expr te = match te.te_e with
 			| _ -> call (func_name name) ) ++
 
 		(* Deallocate the arguments. *)
-		popn (8 * nb_args)
+		popn (16 * nb_args)
 
 	(* Operations. *)
-	| TNot te	-> failwith "Not not implemented."
-		(*
-		set_bool (
-			compile_expr te ++
-			get_bool rax !%rax ++
-			xorq (imm 1) !%rax) *)
-		(*
+	| TNot te	->
 		compile_expr te ++
-		popq rax ++ (* Value. *)
-		popq rbx ++ (* Type. *)
+		get_bool !%rbx ++
 
-		(* Type check. *)
-		cmpq (imm t_bool) !%rbx ++
-		error jnz "Type error: Not takes a bool." ++
-
-		xorq (imm 1) !%rax ++
-		pushq !%rbx ++
-		pushq !%rax
-		*)
+		xorq (imm 1) !%rbx ++
+		set_bool rbx
 	(* TODO *) (*
 	| TBinop (te1, Or, te2) ->
 		(* Lazy evaluation. *)
@@ -580,13 +577,13 @@ let rec compile_expr te = match te.te_e with
 		compile_bloc teb ++
 
 		label if_end *)
-	| _ -> nop (* pushq (imm 0) ++ pushq (imm 0) *) (* TODO *)
+	| _ -> failwith "Not implemented."
 
 and compile_bloc tb = compile_expr_list tb.block_b
 
 (* TODO *)
 and compile_expr_list = function
-	| []		-> set_nothing (* pushq (imm t_nothing) ++ pushq (imm 0) *)
+	| []		-> set_nothing
 	| [te]		-> compile_expr te
 	| te :: tb	-> compile_expr te ++ compile_expr_list tb
 
@@ -616,9 +613,6 @@ let compile_stmt (code_func, code) = function
 	| TFunc tfunc -> code_func ++ compile_func tfunc, code
 
 let gen genv tast ofile =
-	(* env := genv; (* TODO *) *)
-	(* alloc tast; *)
-
 	(* Code generation. *)
 	let code_func, code = List.fold_left compile_stmt (nop, nop) tast in
 
@@ -664,6 +658,7 @@ let gen genv tast ofile =
 			(* Restore the original value of %rsp and %rbp *)
 			movq !%r14 !%rbp ++
 			movq !%r15 !%rsp ++
+
 			(* Exit with code 0. *)
 			xorq !%rax !%rax ++
 			ret ++
