@@ -3,69 +3,6 @@ open Tast
 open X86_64
 open Format
 
-(*
-let alloc_expr env fpmax = function
-	(* Constants. *)
-	| TInt _ | TStr _ | TBool _ -> fpmax
-
-	(* Expressions with parentheses. *)
-	| TPar tb -> alloc_bloc env fpmax tb
-	| TCall (_, _, tf_list) ->
-		(* TODO dispatch*)
-		let tf = List.head tf_list in
-		alloc_func tf
-
-	(* Operations. *)
-	| TNot te -> alloc_expr env fpmax te
-	| TBinop (te1, _, te2) ->
-		let fpmax_1 = alloc_expr env fpmax te1 in
-		alloc_expr env fpmax_1 te2
-
-	| TLval (TVar (_, var)) ->
-		(* if not (Env.is_offset_defined env var) then
-			failwith (sprintf "Variable %s undefined." var); *)
-		fpmax
-	| TLval (TField (te, (_, field))) ->
-		failwith "Structures are not implemented."
-	| TAffect (TVar (_, var), te) ->
-		alloc_expr env fpmax te +
-			if Env.is_offset_defined var then 0
-			else 16
-	| TAffect (TField (te1, (_, field)), te2) ->
-		failwith "Strutures are not implemented." (* TODO *)
-	| TReturn None -> fpmax
-	| TReturn (Some te) -> alloc_expr env fpmax te
-
-	(* Control structures. *)
-	| TFor tfor -> failwith "For loops are not implemented." (* TODO *)
-	| TWhile twhile -> failwith "While loops are not implemented." (* TODO *)
-	| TIf (cond, tb, teb) ->
-		let fpmax_cond = alloc_expr env fpmax cond in
-		let fpmax_tb = alloc_bloc env fpmax_cond tb in
-		alloc_bloc env fpmax_tb teb
-
-let alloc_bloc env fpmax tb =
-	List.fold_right
-		(fun te fpmax_1 -> alloc_expr env fpmax_1 te)
-		tb.block_b
-		fpmax
-
-let alloc_func tf =
-	(* Allocate the arguments. *)
-	let n = List.length tf.tf_params in
-	List.iteri
-		(fun i p -> Env.func_add_ofs tf (snd p.p_name) (16 * (n - i)))
-		tf.tf_params;
-	(* Allocate the local variables. *)
-	func_set_fpmax tf (alloc_bloc tf.tf_env 0 tf.tf_body)
-
-let alloc_stmt = function
-	| TFunc tf -> alloc_func tf
-	| TExpr te -> () (* TODO *)
-
-let alloc tast = List.iter alloc_stmt tast
-*)
-
 let rec repeat n c = match n with
 	| 0 -> nop
 	| _ -> c ++ repeat (n - 1) c
@@ -183,6 +120,7 @@ let set_nothing =
 	movq (imm t_nothing) (ind ~ofs:0 rax)
 
 (* Get. *)
+(* TODO *)
 let get_bool (addr:'a X86_64.register) reg =
 	assert_is_defined addr ++
 	movq (ind ~ofs:0 addr) !%rbx ++
@@ -329,25 +267,15 @@ let label_value_from_gvar var =
 (* let env = ref Env.empty_env (* update when changes env. *) *)
 
 (* TODO env *)
-let rec compile_expr te:[`text] asm = match te.te_e with
+let rec compile_expr te = match te.te_e with
 	(* Constants. *)
 	| TInt n	-> movq (imm64 n) !%rsi ++ set_int rsi
-		(* pushq (imm t_int) ++ movq (imm64 n) !%rax ++ pushq !%rax *)
 	| TStr s	-> set_str s
-		(* pushq (imm t_str) ++ pushq (ilab (distinct_string s)) *)
 	| TBool b	-> movq (imm (if b then 1 else 0)) !%rsi ++ set_bool rsi
-		(* pushq (imm t_bool) ++ pushq (imm (if b then 1 else 0)) *)
 
 	(* Expressions with parentheses. *)
 	| TPar tb ->
 		compile_bloc tb
-		(*
-		List.fold_left (fun c e -> c ++ compile_expr e) nop tb.block_b ++
-		popq rax ++
-		popq rbx ++
-		popn (16 * (List.length tb.block_b - 1)) ++
-		pushq !%rbx ++
-		pushq !%rax *)
 	| TCall ((_, name), args, f_list) ->
 		let nb_args = List.length args in
 
@@ -358,8 +286,8 @@ let rec compile_expr te:[`text] asm = match te.te_e with
 		(match name with
 			| "print" ->
 				movq (imm nb_args) !%rsi ++
-				call ".print" (* ++
-				set_nothing *)
+				call ".print" ++
+				set_nothing
 			| "div" -> failwith "Div not imleplemented"
 				(* TODO
 				let v1 = !%rax in
@@ -388,7 +316,6 @@ let rec compile_expr te:[`text] asm = match te.te_e with
 				pushq (imm t_int) ++
 				pushq v1 *)
 			| _ -> call (func_name name) ) ++
-				(* popn (16 * nb_args)) (* TODO *) *)
 
 		(* Deallocate the arguments. *)
 		popn (8 * nb_args)
@@ -728,13 +655,6 @@ let gen genv tast ofile =
 			movq !%rsp !%r15 ++
 			movq !%rsp !%rbp ++
 
-			(* Define nothing. *)
-			(*
-			xorq !%rax !%rax ++
-			movq (imm t_nothing) !%rbx ++
-			movq !%rax (lab (label_value_from_gvar "nothing")) ++
-			movq !%rbx (lab (label_type_from_gvar "nothing")) ++
-			*)
 			set_nothing ++
 
 			comment "Code of the program." ++
