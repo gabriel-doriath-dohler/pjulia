@@ -1,0 +1,15 @@
+function f(x)
+	return x
+	println(x)
+end
+f(5)
+
+# Test strict evaluation.
+#function loop() loop() end
+#function f(x, y) x + 1 end
+#f(41, loop())
+
+function f(x) x + 1 end
+v = 41
+f(v)
+println(v)
