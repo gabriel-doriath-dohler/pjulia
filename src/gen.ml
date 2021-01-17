@@ -531,17 +531,11 @@ let rec compile_expr te = match te.te_e with
 			failwith "Local variables are not implemented." *)
 
 	(* Control structures. *)
-	| TIf (cond, tb, teb) -> failwith "If not implemented"
-		(*
+	| TIf (cond, tb, teb) ->
 		let else_label = distinct_label "else_label" in
 		let if_end = distinct_label "if_end" in
 		compile_expr cond ++
-		popq rax ++ (* Value. *)
-		popq rbx ++ (* Type. *)
-
-		(* Type check. *)
-		cmpq (imm t_bool) !%rbx ++
-		error jnz "Type error: The condition of an if should have the type bool." ++
+		get_bool !%rax ++
 
 		testq !%rax !%rax ++
 		jz else_label ++
@@ -552,7 +546,7 @@ let rec compile_expr te = match te.te_e with
 		label else_label ++
 		compile_bloc teb ++
 
-		label if_end *)
+		label if_end
 	| _ -> failwith "Not implemented."
 
 and compile_bloc tb = compile_expr_list tb.block_b
