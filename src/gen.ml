@@ -4,13 +4,16 @@ open X86_64
 open Format
 
 (*
-let alloc_expr env fpcur = function
+let alloc_expr env fpmax = function
 	(* Constants. *)
 	| TInt _ | TStr _ | TBool _ -> fpmax
 
 	(* Expressions with parentheses. *)
 	| TPar tb -> alloc_bloc env fpmax tb
-	| TCall (* TODO *)
+	| TCall (_, _, tf_list) ->
+		(* TODO dispatch*)
+		let tf = List.head tf_list in
+		alloc_func tf
 
 	(* Operations. *)
 	| TNot te -> alloc_expr env fpmax te
@@ -18,18 +21,32 @@ let alloc_expr env fpcur = function
 		let fpmax_1 = alloc_expr env fpmax te1 in
 		alloc_expr env fpmax_1 te2
 
-	| TLval _
-	| TAffect
-	| TReturn
+	| TLval (TVar (_, var)) ->
+		(* if not (Env.is_offset_defined env var) then
+			failwith (sprintf "Variable %s undefined." var); *)
+		fpmax
+	| TLval (TField (te, (_, field))) ->
+		failwith "Structures are not implemented."
+	| TAffect (TVar (_, var), te) ->
+		alloc_expr env fpmax te +
+			if Env.is_offset_defined var then 0
+			else 16
+	| TAffect (TField (te1, (_, field)), te2) ->
+		failwith "Strutures are not implemented." (* TODO *)
+	| TReturn None -> fpmax
+	| TReturn (Some te) -> alloc_expr env fpmax te
 
 	(* Control structures. *)
-	| TFor
-	| TWhile
-	| TIf
+	| TFor tfor -> failwith "For loops are not implemented." (* TODO *)
+	| TWhile twhile -> failwith "While loops are not implemented." (* TODO *)
+	| TIf (cond, tb, teb) ->
+		let fpmax_cond = alloc_expr env fpmax cond in
+		let fpmax_tb = alloc_bloc env fpmax_cond tb in
+		alloc_bloc env fpmax_tb teb
 
-let alloc_bloc env fpcur tb =
+let alloc_bloc env fpmax tb =
 	List.fold_right
-		(fun te fpmax_1 -> max fpmax_1 (alloc_expr env fpmax_1 te))
+		(fun te fpmax_1 -> alloc_expr env fpmax_1 te)
 		tb.block_b
 		fpmax
 
@@ -49,9 +66,18 @@ let alloc_stmt = function
 let alloc tast = List.iter alloc_stmt tast
 *)
 
-let popn n = (* TODO undefined *)
+let rec repeat n c = match n with
+	| 0 -> nop
+	| _ -> c ++ repeat (n - 1) c
+
+let popn n =
 	if n = 0 then nop
 	else addq (imm n) !%rsp
+
+let pushn n =
+	repeat n (pushq (imm 11))
+
+let func_name name = sprintf "func_%s" name
 
 (* Code for the type of an object. *)
 let t_undef = -1
@@ -123,6 +149,53 @@ let code_error_n n =
 	movq (imm 1) !%rax ++
 	ret
 
+let assert_is_defined addr =
+	testq (imm 1) !%addr ++
+	error jnz "Variable undefined."
+
+(* Set rax.*)
+(* TODO align. *)
+let set_int reg =
+	movq (imm 16) !%rdi ++
+	pushq !%reg ++
+	call "malloc" ++
+	popq reg ++
+	movq (imm t_int) (ind ~ofs:0 rax) ++
+	movq !%reg (ind ~ofs:(8) rax)
+
+let set_str s =
+	movq (imm 16) !%rdi ++
+	call "malloc" ++
+	movq (imm t_str) (ind ~ofs:0 rax) ++
+	movq (ilab (distinct_string s)) (ind ~ofs:8 rax)
+
+let set_bool reg =
+	movq (imm 16) !%rdi ++
+	pushq !%reg ++
+	call "malloc" ++
+	popq reg ++
+	movq (imm t_bool) (ind ~ofs:0 rax) ++
+	movq !%reg (ind ~ofs:8 rax)
+
+let set_nothing =
+	movq (imm 8) !%rdi ++
+	call "malloc" ++
+	movq (imm t_nothing) (ind ~ofs:0 rax)
+
+(* Get. *)
+let get_bool (addr:'a X86_64.register) reg =
+	assert_is_defined addr ++
+	movq (ind ~ofs:0 addr) !%rbx ++
+	cmpq (imm t_bool) !%rbx ++
+	error jnz "Type error: the expression should have type bool." ++
+	movq (ind ~ofs:8 addr) reg
+
+let get pointer reg_type reg_value =
+	(* TODO struct. *)
+	movq pointer !%rbx ++
+	movq (ind ~ofs:8 rbx) reg_value ++
+	movq (ind ~ofs:0 rbx) reg_type
+
 (* Implementation of print. *)
 let printf s =
 	(* %rsi = data to print. *)
@@ -171,17 +244,13 @@ let print =
 	pushq !%rbp ++
 	movq !%rsp !%rbp ++
 	movq !%rsi !%r12 ++
-	xorq !%r13 !%r13 ++
 
 	label ".print_loop" ++
-	cmpq !%r12 !%r13 ++
+	testq !%r12 !%r12 ++
 	jz ".print_end" ++
-	movq !%r13 !%r9 ++
-	addq !%r9 !%r9 ++
 
-	movq (ind ~ofs:24 ~index:r9 ~scale:8 rsp) !%rdi ++
-	movq (ind ~ofs:16 ~index:r9 ~scale:8 rsp) !%rsi ++
-	incq !%r13 ++
+	get (ind ~ofs:8 ~index:r12 ~scale:8 rbp) !%rdi !%rsi ++
+	decq !%r12 ++
 
 	cmpq (imm t_nothing) !%rdi ++
 	jz ".print_nothing" ++
@@ -198,6 +267,7 @@ let print =
 	leave ++
 	ret
 
+(* TODO
 (* stdlib *)
 let pow =
 	(* rdx <- rax^rcx
@@ -235,10 +305,11 @@ let pow =
 	label ".pow_end" ++
 	imulq !%rbx !%rdx ++
 	ret
+*)
 
 let code_stdlib =
-	print ++ print_nothing ++ print_int ++ print_str ++ print_bool ++
-	pow
+	print ++ print_nothing ++ print_int ++ print_str ++ print_bool (* ++ TODO
+	pow *)
 
 let data_stdlib =
 	(* Data for the print functions. *)
@@ -255,16 +326,20 @@ let label_value_from_gvar var =
 	sprintf "gvar_value_%s" var
 
 (* Compilation. *)
-let env = ref Env.empty_env (* TODO update when changes env. *)
+(* let env = ref Env.empty_env (* update when changes env. *) *)
 
-let rec compile_expr te = match te.te_e with
+(* TODO env *)
+let rec compile_expr te:[`text] asm = match te.te_e with
 	(* Constants. *)
-	| TInt n	-> pushq (imm t_int) ++ movq (imm64 n) !%rax ++ pushq !%rax
-	| TStr s	-> pushq (imm t_str) ++ pushq (ilab (distinct_string s))
-	| TBool b	-> pushq (imm t_bool) ++ pushq (imm (if b then 1 else 0))
+	| TInt n	-> movq (imm64 n) !%rsi ++ set_int rsi
+		(* pushq (imm t_int) ++ movq (imm64 n) !%rax ++ pushq !%rax *)
+	| TStr s	-> set_str s
+		(* pushq (imm t_str) ++ pushq (ilab (distinct_string s)) *)
+	| TBool b	-> movq (imm (if b then 1 else 0)) !%rsi ++ set_bool rsi
+		(* pushq (imm t_bool) ++ pushq (imm (if b then 1 else 0)) *)
 
 	(* Expressions with parentheses. *)
-	| TPar tb -> (* TODO *)
+	| TPar tb ->
 		compile_bloc tb
 		(*
 		List.fold_left (fun c e -> c ++ compile_expr e) nop tb.block_b ++
@@ -277,18 +352,16 @@ let rec compile_expr te = match te.te_e with
 		let nb_args = List.length args in
 
 		(* Compile the arguments and put them on the stack. *)
-		List.fold_left (fun code arg -> compile_expr arg ++ code) nop args ++
+		List.fold_left (fun code arg -> code ++ compile_expr arg ++ pushq !%rax) nop args ++
 
-		(* TODO ne pas pop les arguments *)
 		(* Compile the body of the function. *)
 		(match name with
 			| "print" ->
 				movq (imm nb_args) !%rsi ++
-				call ".print" ++
-				popn (16 * nb_args) ++
-				pushq (imm t_nothing) ++
-				pushq (imm 0)
-			| "div" ->
+				call ".print" (* ++
+				set_nothing *)
+			| "div" -> failwith "Div not imleplemented"
+				(* TODO
 				let v1 = !%rax in
 				let t1 = !%rbx in
 				let v2 = !%rcx in
@@ -313,11 +386,21 @@ let rec compile_expr te = match te.te_e with
 				cqto ++
 				idivq v2 ++
 				pushq (imm t_int) ++
-				pushq v1
-			| _ -> popn (16 * nb_args)) (* TODO *)
+				pushq v1 *)
+			| _ -> call (func_name name) ) ++
+				(* popn (16 * nb_args)) (* TODO *) *)
+
+		(* Deallocate the arguments. *)
+		popn (8 * nb_args)
 
 	(* Operations. *)
-	| TNot te	->
+	| TNot te	-> failwith "Not not implemented."
+		(*
+		set_bool (
+			compile_expr te ++
+			get_bool rax !%rax ++
+			xorq (imm 1) !%rax) *)
+		(*
 		compile_expr te ++
 		popq rax ++ (* Value. *)
 		popq rbx ++ (* Type. *)
@@ -329,6 +412,8 @@ let rec compile_expr te = match te.te_e with
 		xorq (imm 1) !%rax ++
 		pushq !%rbx ++
 		pushq !%rax
+		*)
+	(* TODO *) (*
 	| TBinop (te1, Or, te2) ->
 		(* Lazy evaluation. *)
 		let v1 = !%rax in
@@ -410,8 +495,8 @@ let rec compile_expr te = match te.te_e with
 
 		label and_end ++
 		pushq (imm t_bool) ++
-		pushq !%r8
-	| TBinop (te1, op, te2) ->
+		pushq !%r8 *)
+	| TBinop (te1, op, te2) -> failwith "Binops are not implemented." (*
 		let v1 = !%rax in
 		let t1 = !%rbx in
 		let v2 = !%rcx in
@@ -505,9 +590,10 @@ let rec compile_expr te = match te.te_e with
 			| Add | Sub | Mul -> pushq t1 ++ pushq v1
 			| And | Or -> failwith "And and Or are compiled separately."
 			| Mod | Pow -> pushq (imm t_int) ++ pushq !%rdx
-			| Eq | Neq | L | Leq | G | Geq  -> pushq (imm t_bool) ++ pushq !%r8)
+			| Eq | Neq | L | Leq | G | Geq  -> pushq (imm t_bool) ++ pushq !%r8) *)
 
-	| TLval { lvalue_loc = _; lvalue_type = _; lvalue_lvalue = TVar (l, var); } ->
+	| TLval { lvalue_loc = _; lvalue_type = _; lvalue_lvalue = TVar (l, var); } -> failwith "Lval not implemented"
+		(*
 		if Env.is_global var !env then
 			(* Verify that the variable is defined. *)
 			movq (lab (label_type_from_gvar var)) !%rax ++
@@ -530,8 +616,9 @@ let rec compile_expr te = match te.te_e with
 			pushq !%rax ++
 			pushq !%rbx
 			*)
-		end
-	| TAffect ({ lvalue_loc = _; lvalue_type = _; lvalue_lvalue = TVar (l, var); }, te1) ->
+		end *)
+	| TAffect ({ lvalue_loc = _; lvalue_type = _; lvalue_lvalue = TVar (l, var); }, te1) -> failwith "Affect not implemented"
+		(*
 		compile_expr te1 ++
 		popq rax ++ (* Value. *)
 		popq rbx ++ (* Type. *)
@@ -541,10 +628,11 @@ let rec compile_expr te = match te.te_e with
 			pushq !%rbx ++
 			pushq !%rax
 		else
-			failwith "Local variables are not implemented."
+			failwith "Local variables are not implemented." *)
 
 	(* Control structures. *)
-	| TIf (cond, tb, teb) ->
+	| TIf (cond, tb, teb) -> failwith "If not implemented"
+		(*
 		let else_label = distinct_label "else_label" in
 		let if_end = distinct_label "if_end" in
 		compile_expr cond ++
@@ -564,22 +652,44 @@ let rec compile_expr te = match te.te_e with
 		label else_label ++
 		compile_bloc teb ++
 
-		label if_end
-	| _ -> pushq (imm 0) ++ pushq (imm 0) (* TODO *)
+		label if_end *)
+	| _ -> nop (* pushq (imm 0) ++ pushq (imm 0) *) (* TODO *)
 
 and compile_bloc tb = compile_expr_list tb.block_b
 
+(* TODO *)
 and compile_expr_list = function
-	| []		-> pushq (imm t_nothing) ++ pushq (imm 0)
+	| []		-> set_nothing (* pushq (imm t_nothing) ++ pushq (imm 0) *)
 	| [te]		-> compile_expr te
-	| te :: tb	-> compile_expr te ++ popn 16 ++ compile_expr_list tb
+	| te :: tb	-> compile_expr te ++ compile_expr_list tb
+
+let compile_func tf = failwith "Functions not implemented." (*
+	let nb_lvar = Imap.cardinal tf.tf_env.l in
+	label (func_name (snd tf.tf_name))
+	pushq !%rbp ++
+	movq !%rsp !%rbp ++
+	(* Allocate the local variables. *)
+	pushn nb_lvar ++
+	(* Align. *)
+	(if (nb_lvar + 1) mod 2 = 1 then pushq !%rbx
+	else nop) ++
+	(* Compile the body. *)
+	compile_bloc tf.tf_body ++
+	(* Align. *)
+	(if (nb_lvar + 1) mod 2 = 1 then popq !%rbx
+	else nop) ++
+	(* Deallocate the local variables. *)
+	popn nb_lvar ++
+	(* Return. *)
+	leave ++
+	ret *)
 
 let compile_stmt (code_func, code) = function
 	| TExpr texpr -> code_func, code ++ compile_expr texpr
-	| TFunc tfunc -> code_func, code (* TODO *)
+	| TFunc tfunc -> code_func ++ compile_func tfunc, code
 
 let gen genv tast ofile =
-	env := genv;
+	(* env := genv; (* TODO *) *)
 	(* alloc tast; *)
 
 	(* Code generation. *)
@@ -613,15 +723,19 @@ let gen genv tast ofile =
 		{ text =
 			globl "main" ++ label "main" ++
 			(* Keep %rbp in %r14 for error handeling. *)
-			movq !%rbp !%r15 ++
+			movq !%rbp !%r14 ++
 			(* Keep %rsp in %r15 for error handeling. *)
 			movq !%rsp !%r15 ++
 			movq !%rsp !%rbp ++
+
 			(* Define nothing. *)
+			(*
 			xorq !%rax !%rax ++
 			movq (imm t_nothing) !%rbx ++
 			movq !%rax (lab (label_value_from_gvar "nothing")) ++
 			movq !%rbx (lab (label_type_from_gvar "nothing")) ++
+			*)
+			set_nothing ++
 
 			comment "Code of the program." ++
 			code ++

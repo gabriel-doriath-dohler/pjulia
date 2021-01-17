@@ -51,6 +51,9 @@ let assert_variable_defined l name env =
 	if not (is_variable_defined name env) then
 		Typ.type_error l (sprintf "The variable %s isn't defined." name)
 
+let is_offset_defined var env =
+	Imap.mem var env.ofs
+
 (* For types. *)
 let declare_type typ =
 	Hashtbl.replace declared_types typ ()
