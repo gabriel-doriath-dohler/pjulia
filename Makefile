@@ -54,5 +54,6 @@ clean:
 	rm -f tests/exec/*.s
 	rm -f tests/exec-fail/*.s
 	rm -f out
+	rm -f a.out
 
 .PHONY: all explain tests vtests test1 vtest1 test2 vtest2 clean
