@@ -91,6 +91,17 @@ let assert_is_defined addr =
 	error jnz "Variable undefined."
 
 (* Set rdi with rsi.*)
+let set typ value =
+	movq (imm 16) !%rdi ++
+	pushq !%typ ++
+	pushq !%value ++
+	call "malloc" ++
+	popq value ++
+	popq typ ++
+	movq !%typ (ind ~ofs:0 rax) ++
+	movq !%value (ind ~ofs:(8) rax) ++
+	movq !%rax !%rdi
+
 let set_int =
 	movq (imm 16) !%rdi ++
 	pushq !%rsi ++
@@ -277,19 +288,19 @@ let label_value_from_gvar var =
 (* Compilation. *)
 
 (* TODO env *)
-let rec compile_expr te = match te.te_e with
+let rec compile_expr env te = match te.te_e with
 	(* Constants. *)
 	| TInt n	-> movq (imm64 n) !%rsi ++ set_int
 	| TStr s	-> set_str s
 	| TBool b	-> movq (imm (if b then 1 else 0)) !%rsi ++ set_bool
 
 	(* Expressions with parentheses. *)
-	| TPar tb -> compile_bloc tb
+	| TPar tb -> compile_bloc env tb
 	| TCall ((_, name), args, f_list) ->
 		let nb_args = List.length args in
 
 		(* Compile the arguments and put them on the stack. *)
-		List.fold_left (fun code arg -> code ++ compile_expr arg ++ pushq !%rdi ++ pushq (imm 1)) nop args ++
+		List.fold_left (fun code arg -> code ++ compile_expr env arg ++ pushq !%rdi ++ pushq (imm 1)) nop args ++
 
 		(* Compile the body of the function. *)
 		(match name with
@@ -327,7 +338,7 @@ let rec compile_expr te = match te.te_e with
 
 	(* Operations. *)
 	| TNot te	->
-		compile_expr te ++
+		compile_expr env te ++
 		get_bool !%rsi ++
 
 		xorq (imm 1) !%rsi ++
@@ -339,7 +350,7 @@ let rec compile_expr te = match te.te_e with
 		let or_true = distinct_label ".or_true" in
 		let or_end = distinct_label ".or_end" in
 		(* Evaluate te1. *)
-		compile_expr te1 ++
+		compile_expr env te1 ++
 		get_bool v1 ++
 
 		xorq !%rsi !%rsi ++
@@ -349,7 +360,7 @@ let rec compile_expr te = match te.te_e with
 		jnz or_true ++
 
 		(* Evaluate te2. *)
-		compile_expr te2 ++
+		compile_expr env te2 ++
 		get_bool v2 ++
 
 		xorq !%rsi !%rsi ++
@@ -371,7 +382,7 @@ let rec compile_expr te = match te.te_e with
 		let and_end = distinct_label ".and_end" in
 
 		(* Evaluate te1. *)
-		compile_expr te1 ++
+		compile_expr env te1 ++
 		get_bool v1 ++
 
 		movq (imm 1) !%rsi ++
@@ -381,7 +392,7 @@ let rec compile_expr te = match te.te_e with
 		jz and_false ++
 
 		(* Evaluate te2. *)
-		compile_expr te2 ++
+		compile_expr env te2 ++
 		get_bool v2 ++
 
 		movq (imm 1) !%rsi ++
@@ -400,12 +411,12 @@ let rec compile_expr te = match te.te_e with
 		let t1 = !%rbx in
 		let v2 = !%rcx in
 		let t2 = !%rdx in
-		compile_expr te1 ++
+		compile_expr env te1 ++
 		get t1 v1 ++
 		pushq t1 ++
 		pushq v1 ++
 
-		compile_expr te2 ++
+		compile_expr env te2 ++
 		get t2 v2 ++
 		popq rax ++
 		popq rbx ++
@@ -492,16 +503,15 @@ let rec compile_expr te = match te.te_e with
 			| Mod | Pow -> movq !%rdx !%rsi ++ set_int
 			| Eq | Neq | L | Leq | G | Geq  -> movq !%r8 !%rsi ++ set_bool)
 
-	| TLval { lvalue_loc = _; lvalue_type = _; lvalue_lvalue = TVar (l, var); } -> failwith "Lval not implemented"
-		(*
-		if Env.is_global var !env then
+	| TLval { lvalue_loc = _; lvalue_type = _; lvalue_lvalue = TVar (l, var); } ->
+		if Env.is_global var env then
 			(* Verify that the variable is defined. *)
-			movq (lab (label_type_from_gvar var)) !%rax ++
-			cmpq (imm t_undef) !%rax ++
+			movq (lab (label_type_from_gvar var)) !%rbx ++
+			cmpq (imm t_undef) !%rbx ++
 			error jz (sprintf "Variable %s undefined." var) ++
+			movq (lab (label_value_from_gvar var)) !%rcx ++
 
-			pushq !%rax ++
-			pushq (lab (label_value_from_gvar var))
+			set rbx rcx
 		else begin
 			failwith "Local variables are not implemented."
 			(* TODO
@@ -516,10 +526,10 @@ let rec compile_expr te = match te.te_e with
 			pushq !%rax ++
 			pushq !%rbx
 			*)
-		end *)
+		end
 	| TAffect ({ lvalue_loc = _; lvalue_type = _; lvalue_lvalue = TVar (l, var); }, te1) -> failwith "Affect not implemented"
 		(*
-		compile_expr te1 ++
+		compile_expr env te1 ++
 		popq rax ++ (* Value. *)
 		popq rbx ++ (* Type. *)
 		if Env.is_global var !env then
@@ -534,28 +544,28 @@ let rec compile_expr te = match te.te_e with
 	| TIf (cond, tb, teb) ->
 		let else_label = distinct_label "else_label" in
 		let if_end = distinct_label "if_end" in
-		compile_expr cond ++
+		compile_expr env cond ++
 		get_bool !%rax ++
 
 		testq !%rax !%rax ++
 		jz else_label ++
 
-		compile_bloc tb ++
+		compile_bloc env tb ++
 		jmp if_end ++
 
 		label else_label ++
-		compile_bloc teb ++
+		compile_bloc env teb ++
 
 		label if_end
 	| _ -> failwith "Not implemented."
 
-and compile_bloc tb = compile_expr_list tb.block_b
+and compile_bloc env tb = compile_expr_list env tb.block_b
 
 (* TODO *)
-and compile_expr_list = function
+and compile_expr_list env = function
 	| []		-> set_nothing
-	| [te]		-> compile_expr te
-	| te :: tb	-> compile_expr te ++ compile_expr_list tb
+	| [te]		-> compile_expr env te
+	| te :: tb	-> compile_expr env te ++ compile_expr_list env tb
 
 let compile_func tf = failwith "Functions not implemented." (*
 	let nb_lvar = Imap.cardinal tf.tf_env.l in
@@ -578,13 +588,13 @@ let compile_func tf = failwith "Functions not implemented." (*
 	leave ++
 	ret *)
 
-let compile_stmt (code_func, code) = function
-	| TExpr texpr -> code_func, code ++ compile_expr texpr
+let compile_stmt env (code_func, code) = function
+	| TExpr texpr -> code_func, code ++ compile_expr env texpr
 	| TFunc tfunc -> code_func ++ compile_func tfunc, code
 
 let gen genv tast ofile =
 	(* Code generation. *)
-	let code_func, code = List.fold_left compile_stmt (nop, nop) tast in
+	let code_func, code = List.fold_left (compile_stmt genv) (nop, nop) tast in
 
 	(* Add the global variables to the data segment. *)
 	let data_gvar = Imap.fold
@@ -619,7 +629,11 @@ let gen genv tast ofile =
 			movq !%rsp !%r15 ++
 			movq !%rsp !%rbp ++
 
-			set_nothing ++
+			(* Define nothing. *)
+			xorq !%rax !%rax ++
+			movq (imm t_nothing) !%rbx ++
+			movq !%rax (lab (label_value_from_gvar "nothing")) ++
+			movq !%rbx (lab (label_type_from_gvar "nothing")) ++
 
 			comment "Code of the program." ++
 			code ++
